@@ -2,49 +2,106 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>UNO Liquid</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="script.js" defer></script>
 </head>
 <body>
-    <div class="background-mesh"><div class="orb orb-1"></div><div class="orb orb-2"></div></div>
 
-    <section id="auth-screen" class="screen">
-        <div class="glass-panel">
-            <h1>UNO <span style="font-weight:100">LIQUID</span></h1>
-            <input type="text" id="username" placeholder="Ваше имя" class="ios-input">
-            <button id="start-btn" class="ios-btn">Играть</button>
+    <div class="background-mesh">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <section id="auth-screen" class="screen flex-center">
+        <div class="glass-panel auth-box">
+            <h1 class="logo">UNO <span class="thin">LIQUID</span></h1>
+            <input type="email" id="email" placeholder="Email" class="ios-input">
+            <input type="password" id="password" placeholder="Пароль" class="ios-input">
+            <button id="auth-btn" class="ios-btn primary">Войти</button>
+            <p id="msg" class="status-text"></p>
+        </div>
+    </section>
+
+    <section id="lobby-screen" class="screen hidden">
+        <div class="layout-container">
+            <aside class="glass-panel sidebar">
+                <div class="profile-info">
+                    <h2 id="u-name">Player</h2>
+                    <div class="xp-track">
+                        <div id="xp-bar" class="xp-fill"></div>
+                    </div>
+                    <small id="lvl-txt">Lvl 1</small>
+                </div>
+                <div class="sidebar-actions">
+                    <button onclick="openModal()" class="ios-btn primary">Создать стол</button>
+                    <button id="logout-btn" class="ios-btn secondary">Выйти</button>
+                </div>
+            </aside>
+            <main class="glass-panel content-area">
+                <h3>Доступные столы</h3>
+                <div id="rooms-list" class="scroll-list"></div>
+            </main>
         </div>
     </section>
 
     <section id="game-screen" class="screen hidden">
-        <header class="game-header">
-            <div id="turn-txt">Ожидание игроков...</div>
-            <div id="color-dot" style="width:20px; height:20px; border-radius:50%; border:2px solid white;"></div>
-            <button onclick="socket.emit('addBot', currentRoomId)" class="ios-btn" style="padding:5px 10px; font-size:12px">Добавить бота</button>
+        <header class="game-header glass-strip">
+            <div id="turn-txt" class="status-badge">Ожидание...</div>
+            <div class="color-indicator-wrapper">
+                <div id="color-dot" class="color-blob"></div>
+            </div>
+            <button id="bot-btn" class="ios-btn small">Add Bot</button>
         </header>
+
         <div class="game-arena">
             <div id="opponents" class="opponents-row"></div>
-            <div style="display:flex; gap:20px;">
-                <div id="deck" onclick="socket.emit('drawCard', currentRoomId)" class="card" style="background:#1a1a1a; cursor:pointer">UNO</div>
+            
+            <div class="center-table">
+                <div id="deck" class="card card-back">UNO</div>
                 <div id="pile"></div>
             </div>
         </div>
-        <div class="hand-container" id="hand"></div>
+
+        <div class="player-hud glass-strip-bottom">
+            <div id="uno-controls" class="hidden floating-action">
+                <button id="uno-btn" class="uno-shout-btn">UNO!</button>
+            </div>
+            
+            <div id="hand" class="hand-container">
+                </div>
+            
+            <button id="draw-btn" class="ios-btn draw-action">Взять карту</button>
+        </div>
     </section>
 
-    <div id="modal-color" class="overlay hidden">
-        <div class="glass-panel">
-            <h3>Выберите цвет:</h3>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                <div onclick="pickColor('red')" class="card red" style="width:60px; height:60px"></div>
-                <div onclick="pickColor('blue')" class="card blue" style="width:60px; height:60px"></div>
-                <div onclick="pickColor('green')" class="card green" style="width:60px; height:60px"></div>
-                <div onclick="pickColor('yellow')" class="card yellow" style="width:60px; height:60px"></div>
+    <div id="modal-create" class="overlay hidden">
+        <div class="glass-panel modal-box">
+            <h3>Новая игра</h3>
+            <input type="text" id="r-name" placeholder="Название" class="ios-input">
+            <input type="password" id="r-pass" placeholder="Пароль" class="ios-input">
+            <div class="modal-actions">
+                <button id="create-confirm" class="ios-btn primary">Создать</button>
+                <button onclick="closeModals()" class="ios-btn secondary">Отмена</button>
             </div>
         </div>
     </div>
+
+    <div id="modal-color" class="overlay hidden">
+        <div class="glass-panel modal-box">
+            <h3>Выберите цвет</h3>
+            <div class="color-options">
+                <div class="color-btn c-red" onclick="pickColor('red')"></div>
+                <div class="color-btn c-blue" onclick="pickColor('blue')"></div>
+                <div class="color-btn c-green" onclick="pickColor('green')"></div>
+                <div class="color-btn c-yellow" onclick="pickColor('yellow')"></div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
