@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>UNO Royale</title>
+    <title>UNO Glass</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -11,94 +11,71 @@
 </head>
 <body>
 
-    <section id="auth-screen" class="screen flex-center">
-        <div class="glass-panel text-center">
-            <h1 class="logo">UNO <span class="highlight">ROYALE</span></h1>
-            <p>Ultimate Card Battle</p>
-            <input type="email" id="email" placeholder="E-mail" class="input-field">
-            <input type="password" id="password" placeholder="Пароль" class="input-field">
-            <button id="login-btn" class="btn-primary full-width">ВОЙТИ / РЕГИСТРАЦИЯ</button>
-            <p id="auth-msg" class="error-text"></p>
+    <div id="auth-screen" class="screen">
+        <div class="glass center-box">
+            <h1>UNO <span style="color:var(--primary)">ROYAL</span></h1>
+            <input type="email" id="email" placeholder="Email">
+            <input type="password" id="password" placeholder="Пароль">
+            <button id="auth-btn" class="btn-main">ВОЙТИ</button>
+            <p id="msg" style="font-size:0.8rem; color:#faa"></p>
         </div>
-    </section>
+    </div>
 
-    <section id="lobby-screen" class="screen hidden">
-        <div class="lobby-layout">
-            <aside class="sidebar glass-panel">
-                <div class="profile-header">
-                    <div class="avatar-circle" id="prof-avatar">👤</div>
-                    <div>
-                        <h2 id="prof-name">Игрок</h2>
-                        <span class="badge" id="prof-lvl-badge">Lvl 1</span>
-                    </div>
+    <div id="lobby-screen" class="screen hidden">
+        <div class="lobby-grid">
+            <div class="glass sidebar">
+                <h2 id="u-name">...</h2>
+                <div style="background:#000; height:5px; margin:10px 0; border-radius:5px;">
+                    <div id="xp-bar" style="width:0%; height:100%; background:var(--primary); transition:0.5s"></div>
                 </div>
-                <div class="xp-bar-container">
-                    <div class="xp-bar-fill" id="xp-fill"></div>
-                    <span class="xp-text" id="xp-text">0 / 100 XP</span>
-                </div>
-                <div class="stats-row">
-                    <div>🏆 <span id="prof-wins">0</span> Побед</div>
-                </div>
-                <hr>
-                <button id="open-create-modal" class="btn-primary full-width">➕ СОЗДАТЬ СТОЛ</button>
-                <button id="logout-btn" class="btn-secondary full-width mt-10">ВЫЙТИ</button>
-            </aside>
-
-            <main class="rooms-container glass-panel">
-                <h2>СПИСОК СТОЛОВ</h2>
-                <div id="rooms-list" class="scrollable-list">
-                    <div class="empty-msg">Нет активных игр. Создайте свою!</div>
-                </div>
-            </main>
-        </div>
-    </section>
-
-    <section id="game-screen" class="screen hidden game-bg">
-        <header class="game-top">
-            <div class="turn-badge" id="turn-indicator">ОЖИДАНИЕ...</div>
-            <div class="current-color-box">
-                ЦВЕТ: <div id="current-color-dot" class="dot"></div>
+                <small id="lvl-txt">Lvl 1</small>
+                <button onclick="openModal()" class="btn-main" style="margin-top:auto">СОЗДАТЬ СТОЛ</button>
+                <button id="logout-btn" class="btn-sec">ВЫЙТИ</button>
             </div>
-            <div class="top-btns">
-                <button id="add-bot-btn" class="btn-small">🤖 БОТ</button>
-                <button id="exit-game-btn" class="btn-small red-btn">ВЫХОД</button>
-            </div>
-        </header>
-
-        <div class="game-center">
-            <div id="opponents-container" class="opponents-row"></div>
-            
-            <div class="table-area">
-                <div id="draw-pile" class="card card-back">UNO</div>
-                <div id="discard-pile">
-                    </div>
-            </div>
-        </div>
-
-        <div class="game-bottom">
-            <div id="uno-actions" class="hidden">
-                <button id="shout-uno" class="btn-warning pulsate">КРИКНУТЬ UNO!</button>
-            </div>
-            <div id="my-hand" class="hand-scroll"></div>
-            <button id="draw-card-btn" class="btn-draw">ВЗЯТЬ КАРТУ</button>
-        </div>
-    </section>
-
-    <div id="modal-create" class="overlay hidden">
-        <div class="glass-panel modal">
-            <h3>Создать игру</h3>
-            <input type="text" id="new-room-name" placeholder="Название стола" class="input-field">
-            <input type="password" id="new-room-pass" placeholder="Пароль (пусто для всех)" class="input-field">
-            <div class="modal-btns">
-                <button id="confirm-create" class="btn-primary">СОЗДАТЬ</button>
-                <button onclick="closeModals()" class="btn-secondary">ОТМЕНА</button>
+            <div class="glass room-area">
+                <h2>ДОСТУПНЫЕ СТОЛЫ</h2>
+                <div id="rooms-list"></div>
             </div>
         </div>
     </div>
 
+    <div id="game-screen" class="screen hidden">
+        <div class="game-top">
+            <div id="turn-txt">ОЖИДАНИЕ...</div>
+            <div>ЦВЕТ: <span id="color-dot" class="color-ind"></span></div>
+            <button id="bot-btn" class="btn-sec" style="width:auto; padding:5px 15px">БОТ+</button>
+        </div>
+
+        <div class="game-mid">
+            <div id="opponents" class="opponents"></div>
+            <div class="table-center">
+                <div id="deck" class="card back">UNO</div>
+                <div id="pile"></div>
+            </div>
+        </div>
+
+        <div class="hand-area">
+            <div id="uno-controls" class="hidden">
+                <button id="uno-btn" style="background:#ffa502; color:black; margin-bottom:10px; padding:5px 20px;">UNO!</button>
+            </div>
+            <div id="hand" class="hand-scroll"></div>
+            <button id="draw-btn" class="btn-main" style="width:200px; border-radius:20px;">ВЗЯТЬ КАРТУ</button>
+        </div>
+    </div>
+
+    <div id="modal-create" class="overlay hidden">
+        <div class="glass modal">
+            <h3>Новая игра</h3>
+            <input type="text" id="r-name" placeholder="Название">
+            <input type="password" id="r-pass" placeholder="Пароль">
+            <button id="create-confirm" class="btn-main">СОЗДАТЬ</button>
+            <button onclick="closeModals()" class="btn-sec">ОТМЕНА</button>
+        </div>
+    </div>
+
     <div id="modal-color" class="overlay hidden">
-        <div class="glass-panel modal">
-            <h3>ВЫБЕРИТЕ ЦВЕТ</h3>
+        <div class="glass modal">
+            <h3>ВЫБЕРИ ЦВЕТ</h3>
             <div class="color-grid">
                 <div class="c-btn red" onclick="pickColor('red')"></div>
                 <div class="c-btn blue" onclick="pickColor('blue')"></div>

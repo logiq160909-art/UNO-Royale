@@ -1,242 +1,173 @@
 window.addEventListener('load', async () => {
-    // КОНФИГУРАЦИЯ
     const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
-    
-    // Безопасная загрузка библиотек
-    const sbLib = window.supabase || window.supabasejs;
-    if (!sbLib) return alert("Ошибка: Supabase не загрузился. Отключите AdBlock.");
-    
-    const supabase = sbLib.createClient(supabaseUrl, supabaseKey);
+    const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
     const socket = io();
 
-    // Состояние
-    let currentUser = null;
+    let user = null;
     let currentRoomId = null;
-    let pendingCardIndex = null; // Для Wild карты
+    let pendingIndex = null;
 
-    // 1. ПРОВЕРКА АВТОРИЗАЦИИ
+    // АВТОРИЗАЦИЯ
     const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-        initLobby(session.user);
-    }
+    if(session) initLobby(session.user);
 
-    // 2. ВХОД В СИСТЕМУ
-    document.getElementById('login-btn').onclick = async () => {
+    document.getElementById('auth-btn').onclick = async () => {
         const email = document.getElementById('email').value;
-        const pass = document.getElementById('password').value;
-        const msg = document.getElementById('auth-msg');
+        const password = document.getElementById('password').value;
+        document.getElementById('msg').innerText = "Загрузка...";
         
-        if(!email || !pass) return msg.innerText = "Введите Email и пароль";
-        msg.innerText = "Загрузка...";
-
-        // Пробуем войти
-        let { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-        
-        if (error) {
-            // Если ошибка, пробуем создать аккаунт
-            let { data: upData, error: upError } = await supabase.auth.signUp({ email, password: pass });
-            if (upError) {
-                msg.innerText = "Ошибка: " + upError.message;
-            } else {
-                alert("Аккаунт создан! Теперь вы вошли.");
-                initLobby(upData.user);
-            }
+        let { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if(error) {
+            let { data: up, error: upErr } = await supabase.auth.signUp({ email, password });
+            if(upErr) return document.getElementById('msg').innerText = upErr.message;
+            initLobby(up.user);
         } else {
             initLobby(data.user);
         }
     };
 
-    async function initLobby(user) {
-        currentUser = user;
+    async function initLobby(u) {
+        user = u;
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('lobby-screen').classList.remove('hidden');
         
-        // Загрузка профиля (XP, Wins)
-        let { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        
-        // Если профиля нет, создаем
-        if (!prof) {
-            prof = { id: user.id, username: user.email.split('@')[0], level: 1, xp: 0, wins: 0 };
-            await supabase.from('profiles').insert([prof]);
+        let { data: p } = await supabase.from('profiles').select('*').eq('id', u.id).single();
+        if(!p) {
+             p = { id: u.id, username: u.email.split('@')[0], level: 1, xp: 0 };
+             await supabase.from('profiles').insert([p]);
         }
-
-        // Рендер сайдбара
-        document.getElementById('prof-name').innerText = prof.username;
-        document.getElementById('prof-lvl-badge').innerText = "Lvl " + prof.level;
-        document.getElementById('prof-wins').innerText = prof.wins;
-        document.getElementById('xp-fill').style.width = (prof.xp % 100) + "%";
-        document.getElementById('xp-text').innerText = `${prof.xp % 100} / 100 XP`;
+        document.getElementById('u-name').innerText = p.username;
+        document.getElementById('lvl-txt').innerText = `Lvl ${p.level} | Побед: ${p.wins}`;
+        document.getElementById('xp-bar').style.width = (p.xp % 100) + '%';
     }
 
-    // 3. ЛОББИ: СПИСОК КОМНАТ
-    socket.on('roomsList', (rooms) => {
-        const container = document.getElementById('rooms-list');
-        if (rooms.length === 0) {
-            container.innerHTML = `<div class="empty-msg" style="padding:20px; text-align:center; color:#aaa">Столов нет. Создайте первый!</div>`;
-            return;
-        }
-        
-        container.innerHTML = rooms.map(r => `
-            <div class="room-item">
-                <div>
-                    <strong>${r.name}</strong>
-                    <div style="font-size:0.8rem; color:#aaa">${r.players}/4 игроков ${r.isPrivate ? '🔒' : ''}</div>
-                </div>
-                <button class="btn-primary" onclick="joinRoomRequest('${r.id}', ${r.isPrivate})">ВОЙТИ</button>
+    // ЛОББИ И ВХОД
+    socket.on('roomsList', list => {
+        document.getElementById('rooms-list').innerHTML = list.map(r => `
+            <div class="room-card">
+                <span>${r.name} (${r.players}/4) ${r.isPrivate?'🔒':''}</span>
+                <button class="btn-main" style="width:80px" onclick="tryJoin('${r.id}', ${r.isPrivate}, this)">ВОЙТИ</button>
             </div>
         `).join('');
     });
 
-    // 4. СОЗДАНИЕ И ВХОД
-    document.getElementById('open-create-modal').onclick = () => document.getElementById('modal-create').classList.remove('hidden');
-    window.closeModals = () => document.querySelectorAll('.overlay').forEach(el => el.classList.add('hidden'));
-
-    document.getElementById('confirm-create').onclick = () => {
-        const name = document.getElementById('new-room-name').value;
-        const pass = document.getElementById('new-room-pass').value;
-        if(name) {
-            socket.emit('createRoom', { name, password: pass });
-            closeModals();
-        }
-    };
-
-    socket.on('roomCreated', (id) => {
-        joinRoomRequest(id, false);
-    });
-
-    window.joinRoomRequest = (id, isPrivate) => {
-        let pass = null;
-        if (isPrivate) pass = prompt("Введите пароль комнаты:");
+    window.tryJoin = (id, isPriv, btnElement) => {
+        // Блокируем кнопку, чтобы не нажать дважды
+        btnElement.disabled = true;
+        btnElement.innerText = "...";
         
-        currentRoomId = id;
-        socket.emit('joinRoom', { 
-            roomId: id, 
-            password: pass, 
-            username: document.getElementById('prof-name').innerText 
-        });
+        let pass = isPriv ? prompt('Пароль') : null;
+        socket.emit('joinRoom', { roomId: id, password: pass, username: document.getElementById('u-name').innerText });
+        
+        // Если ошибка - разблокируем (придет событие errorMsg)
+        setTimeout(() => { 
+            btnElement.disabled = false; 
+            btnElement.innerText = "ВОЙТИ";
+        }, 3000);
     };
 
-    // Ошибки входа
-    socket.on('errorMsg', (msg) => alert(msg));
-
-    // Успешный вход -> Переключение экранов
-    socket.on('updateState', (state) => {
+    socket.on('errorMsg', msg => alert(msg));
+    
+    // ВАЖНО: Переключение экрана только по сигналу успеха
+    socket.on('joinSuccess', (roomId) => {
+        currentRoomId = roomId;
         document.getElementById('lobby-screen').classList.add('hidden');
         document.getElementById('game-screen').classList.remove('hidden');
-        renderGame(state);
     });
 
-    socket.on('initGame', (state) => renderGame(state));
+    window.openModal = () => document.getElementById('modal-create').classList.remove('hidden');
+    window.closeModals = () => document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden'));
 
-    // 5. ИГРОВОЙ РЕНДЕР
+    document.getElementById('create-confirm').onclick = () => {
+        const name = document.getElementById('r-name').value;
+        const password = document.getElementById('r-pass').value;
+        socket.emit('createRoom', { name, password });
+        closeModals();
+    };
+
+    socket.on('roomCreated', id => {
+        // Авто вход после создания
+        socket.emit('joinRoom', { roomId: id, password: document.getElementById('r-pass').value, username: document.getElementById('u-name').innerText });
+    });
+
+    // ИГРА
+    socket.on('updateState', renderGame);
+    socket.on('initGame', renderGame);
+
     function renderGame(state) {
-        // 1. Кто я?
         const me = state.fullPlayersForLogic.find(p => p.id === socket.id);
         if(!me) return;
 
-        // 2. Верхняя панель
-        const activePlayer = state.fullPlayersForLogic[state.turnIndex];
-        const isMyTurn = activePlayer.id === socket.id;
+        const isTurn = state.fullPlayersForLogic[state.turnIndex].id === socket.id;
+        document.getElementById('turn-txt').innerText = isTurn ? "ТВОЙ ХОД!" : "ЖДИ...";
+        document.getElementById('color-dot').style.background = state.currentColor === 'wild' ? '#fff' : getColorHex(state.currentColor);
         
-        document.getElementById('turn-indicator').innerText = isMyTurn ? "ВАШ ХОД!" : `ХОДИТ: ${activePlayer.name}`;
-        document.getElementById('turn-indicator').style.background = isMyTurn ? "var(--green)" : "var(--secondary)";
-        
-        // Цвет стола
-        const colorDot = document.getElementById('current-color-dot');
-        colorDot.style.background = `var(--${state.currentColor})`;
-        
-        // 3. Центр стола
-        const discard = document.getElementById('discard-pile');
-        if (state.topCard) {
-            discard.innerHTML = renderCardHTML(state.topCard);
+        // Карта на столе
+        if(state.topCard) {
+            document.getElementById('pile').innerHTML = `<div class="card ${state.topCard.color}"><span>${state.topCard.value}</span></div>`;
         }
 
-        // 4. Соперники
-        const oppContainer = document.getElementById('opponents-container');
-        oppContainer.innerHTML = state.fullPlayersForLogic
+        // Соперники
+        document.getElementById('opponents').innerHTML = state.fullPlayersForLogic
             .filter(p => p.id !== socket.id)
             .map(p => `
-                <div class="opponent-card">
+                <div class="opp-card">
                     <div>${p.name}</div>
-                    <div style="font-size:1.2rem">🃏 ${p.hand.length}</div>
-                    ${p.unoSaid ? '<span style="color:orange; font-weight:bold">UNO!</span>' : ''}
+                    <div>Cards: ${p.hand.length}</div>
+                    ${p.unoSaid ? '<b style="color:orange">UNO!</b>' : ''}
                 </div>
             `).join('');
 
-        // 5. Моя рука
-        const handContainer = document.getElementById('my-hand');
-        handContainer.innerHTML = me.hand.map((card, idx) => `
-            <div class="card ${card.color}" onclick="onCardClick(${idx}, '${card.color}')">
-                <span>${card.value}</span>
-            </div>
+        // Рука
+        document.getElementById('hand').innerHTML = me.hand.map((c, i) => `
+            <div class="card ${c.color}" onclick="clickCard(${i}, '${c.color}')"><span>${c.value}</span></div>
         `).join('');
 
-        // 6. Кнопка UNO
-        const unoArea = document.getElementById('uno-actions');
-        if (me.hand.length === 2 && isMyTurn) { // Показываем кнопку если осталось 2 карты и мой ход (станет 1 после хода)
-             unoArea.classList.remove('hidden');
-        } else {
-             unoArea.classList.add('hidden');
-        }
+        // Кнопка UNO
+        if(isTurn && me.hand.length === 2) document.getElementById('uno-controls').classList.remove('hidden');
+        else document.getElementById('uno-controls').classList.add('hidden');
     }
 
-    // Хелпер для отрисовки карты
-    function renderCardHTML(card) {
-        const colorClass = card.color === 'wild' ? 'wild' : card.color;
-        return `<div class="card ${colorClass}"><span>${card.value}</span></div>`;
+    function getColorHex(name) {
+        if(name==='red') return '#ff4757';
+        if(name==='blue') return '#1e90ff';
+        if(name==='green') return '#2ed573';
+        if(name==='yellow') return '#ffa502';
+        return '#fff';
     }
 
-    // 6. УПРАВЛЕНИЕ ИГРОЙ
-    window.onCardClick = (idx, color) => {
-        if (color === 'wild') {
-            pendingCardIndex = idx;
+    window.clickCard = (i, color) => {
+        if(color === 'wild') {
+            pendingIndex = i;
             document.getElementById('modal-color').classList.remove('hidden');
         } else {
-            socket.emit('playCard', { roomId: currentRoomId, cardIndex: idx });
+            socket.emit('playCard', { roomId: currentRoomId, cardIndex: i });
         }
     };
 
-    window.pickColor = (color) => {
-        socket.emit('playCard', { roomId: currentRoomId, cardIndex: pendingCardIndex, chosenColor: color });
-        document.getElementById('modal-color').classList.add('hidden');
+    window.pickColor = (c) => {
+        socket.emit('playCard', { roomId: currentRoomId, cardIndex: pendingIndex, chosenColor: c });
+        closeModals();
     };
 
-    document.getElementById('draw-card-btn').onclick = () => socket.emit('drawCard', currentRoomId);
-    document.getElementById('draw-pile').onclick = () => socket.emit('drawCard', currentRoomId);
-    
-    document.getElementById('shout-uno').onclick = () => {
-        socket.emit('sayUno', currentRoomId);
-        document.getElementById('uno-actions').classList.add('hidden');
-    };
+    document.getElementById('draw-btn').onclick = () => socket.emit('drawCard', currentRoomId);
+    document.getElementById('deck').onclick = () => socket.emit('drawCard', currentRoomId);
+    document.getElementById('uno-btn').onclick = () => socket.emit('sayUno', currentRoomId);
+    document.getElementById('bot-btn').onclick = () => socket.emit('addBot', currentRoomId);
+    document.getElementById('logout-btn').onclick = async () => { await supabase.auth.signOut(); location.reload(); };
 
-    document.getElementById('add-bot-btn').onclick = () => socket.emit('addBot', currentRoomId);
-    
-    document.getElementById('exit-game-btn').onclick = () => location.reload();
-
-    // 7. СОБЫТИЯ ИГРЫ
     socket.on('gameOver', async ({ winner, id }) => {
-        const isWin = id === socket.id;
-        alert(isWin ? "ПОБЕДА! 🎉 +50 XP" : `Победил ${winner}. Вы получили +10 XP`);
-        
-        // Обновляем XP в базе
-        if(currentUser) {
-            let { data: p } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
-            const newXp = p.xp + (isWin ? 50 : 10);
-            const newLvl = Math.floor(newXp / 100) + 1;
-            const newWins = isWin ? p.wins + 1 : p.wins;
-            
-            await supabase.from('profiles').update({ xp: newXp, level: newLvl, wins: newWins }).eq('id', currentUser.id);
+        const win = id === socket.id;
+        alert(win ? "ПОБЕДА!" : "Победил " + winner);
+        if(user) {
+             let { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+             await supabase.from('profiles').update({ 
+                 xp: p.xp + (win?50:10), 
+                 level: Math.floor((p.xp + (win?50:10))/100)+1,
+                 wins: win ? p.wins+1 : p.wins
+             }).eq('id', user.id);
         }
         location.reload();
-    });
-
-    socket.on('unoEffect', (name) => {
-        // Визуальное уведомление
-        const div = document.createElement('div');
-        div.innerText = `${name} КРИЧИТ UNO!`;
-        div.style.cssText = "position:fixed; top:20%; left:50%; transform:translateX(-50%); background:orange; padding:20px; font-size:2rem; z-index:1000; border-radius:10px; box-shadow:0 0 20px orange;";
-        document.body.appendChild(div);
-        setTimeout(() => div.remove(), 2000);
     });
 });

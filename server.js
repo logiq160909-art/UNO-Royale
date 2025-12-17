@@ -10,7 +10,7 @@ app.use(express.static('public'));
 
 let rooms = {};
 
-// Генерация колоды
+// ГЕНЕРАЦИЯ КОЛОДЫ
 function createDeck() {
     const colors = ['red', 'blue', 'green', 'yellow'];
     const values = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'SKIP', 'REVERSE', '+2'];
@@ -26,10 +26,9 @@ function createDeck() {
     return deck.sort(() => Math.random() - 0.5);
 }
 
-// Удаление комнаты
+// УДАЛЕНИЕ КОМНАТЫ
 function destroyRoom(roomId) {
     if (rooms[roomId]) {
-        console.log(`Комната ${roomId} удалена.`);
         delete rooms[roomId];
         io.emit('roomsList', getRoomsPublicInfo());
     }
@@ -45,7 +44,6 @@ function getRoomsPublicInfo() {
 }
 
 io.on('connection', (socket) => {
-    // Отправляем список комнат сразу
     socket.emit('roomsList', getRoomsPublicInfo());
 
     // СОЗДАНИЕ
@@ -61,40 +59,59 @@ io.on('connection', (socket) => {
             turnIndex: 0,
             currentColor: '',
             gameStarted: false,
-            // Таймер удаления (10 мин бездействия)
-            timer: setTimeout(() => destroyRoom(roomId), 600000)
+            timer: setTimeout(() => destroyRoom(roomId), 900000) // 15 мин
         };
         socket.emit('roomCreated', roomId);
         io.emit('roomsList', getRoomsPublicInfo());
     });
 
-    // ВХОД
+    // ВХОД (ИСПРАВЛЕНО ДУБЛИРОВАНИЕ)
     socket.on('joinRoom', ({ roomId, password, username }) => {
         const room = rooms[roomId];
         if (!room) return socket.emit('errorMsg', 'Комната не найдена');
         if (room.password && room.password !== password) return socket.emit('errorMsg', 'Неверный пароль');
         
-        // Сброс таймера удаления
+        // ЗАЩИТА ОТ ДУБЛЕЙ
+        const isAlreadyInRoom = room.players.some(p => p.id === socket.id);
+        if (isAlreadyInRoom) {
+            // Если игрок уже там, просто возвращаем ему состояние игры, но не добавляем снова
+            socket.emit('joinSuccess', roomId); 
+            return io.to(roomId).emit('updateState', sanitizeState(room));
+        }
+
+        if (room.players.length >= 4) return socket.emit('errorMsg', 'Комната переполнена');
+
         clearTimeout(room.timer);
         room.timer = setTimeout(() => destroyRoom(roomId), 600000);
 
         socket.join(roomId);
-        // Добавляем игрока
-        const newPlayer = { id: socket.id, name: username, hand: [], isBot: false, unoSaid: false };
-        room.players.push(newPlayer);
+        room.players.push({ id: socket.id, name: username, hand: [], isBot: false, unoSaid: false });
 
-        // Старт игры если >= 2
+        socket.emit('joinSuccess', roomId); // Сигнал клиенту переключить экран
+
         if (room.players.length >= 2 && !room.gameStarted) {
             startGame(room);
         } else {
-            // Если игра уже идет, отправляем состояние новому игроку
             io.to(roomId).emit('updateState', sanitizeState(room));
         }
         
         io.emit('roomsList', getRoomsPublicInfo());
     });
 
-    // ДОБАВИТЬ БОТА
+    // ВЫХОД
+    socket.on('disconnect', () => {
+        for (let roomId in rooms) {
+            let room = rooms[roomId];
+            room.players = room.players.filter(p => p.id !== socket.id);
+            if (room.players.length === 0) {
+                destroyRoom(roomId);
+            } else {
+                io.to(roomId).emit('updateState', sanitizeState(room));
+                io.emit('roomsList', getRoomsPublicInfo());
+            }
+        }
+    });
+
     socket.on('addBot', (roomId) => {
         const room = rooms[roomId];
         if (room && room.players.length < 4) {
@@ -107,24 +124,17 @@ io.on('connection', (socket) => {
 
     function startGame(room) {
         room.gameStarted = true;
-        room.deck = createDeck(); // Новая колода
+        room.deck = createDeck();
         room.players.forEach(p => p.hand = room.deck.splice(0, 7));
-        
-        // Первая карта не должна быть Wild
-        do {
-            room.topCard = room.deck.pop();
-        } while (room.topCard.color === 'wild');
-        
+        do { room.topCard = room.deck.pop(); } while (room.topCard.color === 'wild');
         room.currentColor = room.topCard.color;
         io.to(room.id).emit('initGame', sanitizeState(room));
     }
 
-    // ХОД ИГРОКА
     socket.on('playCard', ({ roomId, cardIndex, chosenColor }) => {
         const room = rooms[roomId];
         if (!room) return;
         
-        // Сброс таймера активности
         clearTimeout(room.timer);
         room.timer = setTimeout(() => destroyRoom(roomId), 600000);
 
@@ -132,17 +142,14 @@ io.on('connection', (socket) => {
         if (player.id !== socket.id) return;
 
         const card = player.hand[cardIndex];
-        // Проверка валидности хода
         const isWild = card.color === 'wild';
         const isMatch = (card.color === room.currentColor) || (card.value === room.topCard.value) || isWild;
 
         if (isMatch) {
-            // Убираем карту из руки
             player.hand.splice(cardIndex, 1);
             room.topCard = card;
             room.currentColor = isWild ? chosenColor : card.color;
 
-            // Эффекты карт
             if (card.value === '+2') {
                 const nextP = room.players[(room.turnIndex + 1) % room.players.length];
                 nextP.hand.push(...room.deck.splice(0, 2));
@@ -151,24 +158,19 @@ io.on('connection', (socket) => {
                 const nextP = room.players[(room.turnIndex + 1) % room.players.length];
                 nextP.hand.push(...room.deck.splice(0, 4));
             }
-            if (card.value === 'SKIP' || card.value === 'REVERSE') { // Для простоты REVERSE на 2 игрока работает как SKIP
+            if (card.value === 'SKIP' || card.value === 'REVERSE') {
                 room.turnIndex = (room.turnIndex + 1) % room.players.length; 
             }
 
-            // Проверка победы
             if (player.hand.length === 0) {
                 io.to(roomId).emit('gameOver', { winner: player.name, id: player.id });
-                // Сброс игры, но не комнаты
                 room.gameStarted = false;
-                room.players.forEach(p => p.hand = []);
+                room.players = []; // Очистка после игры
                 return;
             }
 
-            // Следующий ход
             room.turnIndex = (room.turnIndex + 1) % room.players.length;
             io.to(roomId).emit('updateState', sanitizeState(room));
-            
-            // Если следующий - бот
             checkBotTurn(room);
         }
     });
@@ -180,7 +182,7 @@ io.on('connection', (socket) => {
         if (player.id !== socket.id) return;
 
         player.hand.push(room.deck.pop());
-        player.unoSaid = false; // Сброс UNO флага
+        player.unoSaid = false;
         room.turnIndex = (room.turnIndex + 1) % room.players.length;
         
         io.to(roomId).emit('updateState', sanitizeState(room));
@@ -201,51 +203,43 @@ io.on('connection', (socket) => {
         const player = room.players[room.turnIndex];
         if (player && player.isBot) {
             setTimeout(() => {
-                // Логика бота
                 const matchIndex = player.hand.findIndex(c => c.color === 'wild' || c.color === room.currentColor || c.value === room.topCard.value);
                 
                 if (matchIndex !== -1) {
                     const card = player.hand[matchIndex];
                     player.hand.splice(matchIndex, 1);
                     room.topCard = card;
-                    // Бот всегда выбирает красный если wild
-                    room.currentColor = card.color === 'wild' ? 'red' : card.color;
+                    room.currentColor = card.color === 'wild' ? 'red' : card.color; // Бот всегда выбирает красный
                     
-                    if(card.value === '+2') {
-                         const nextP = room.players[(room.turnIndex + 1) % room.players.length];
-                         nextP.hand.push(...room.deck.splice(0, 2));
+                    if(card.value === '+2') room.players[(room.turnIndex + 1) % room.players.length].hand.push(...room.deck.splice(0, 2));
+                    if(card.value === '+4') room.players[(room.turnIndex + 1) % room.players.length].hand.push(...room.deck.splice(0, 4));
+                    if(card.value === 'SKIP') room.turnIndex = (room.turnIndex + 1) % room.players.length;
+
+                    if (player.hand.length === 0) {
+                         io.to(room.id).emit('gameOver', { winner: player.name, id: player.id });
+                         room.gameStarted = false;
+                         return;
                     }
                 } else {
                     player.hand.push(room.deck.pop());
                 }
-                
-                if (player.hand.length === 0) {
-                     io.to(room.id).emit('gameOver', { winner: player.name, id: player.id });
-                     room.gameStarted = false;
-                     return;
-                }
-
                 room.turnIndex = (room.turnIndex + 1) % room.players.length;
                 io.to(room.id).emit('updateState', sanitizeState(room));
-                checkBotTurn(room); // Рекурсия, если следующий тоже бот
+                checkBotTurn(room);
             }, 1500);
         }
     }
 
-    // Убираем лишние данные перед отправкой (чтобы не видеть карты врага)
     function sanitizeState(room) {
         return {
             id: room.id,
-            players: room.players.map(p => ({ id: p.id, name: p.name, handSize: p.hand.length, isBot: p.isBot })),
+            players: room.players.map(p => ({ id: p.id, name: p.name, handSize: p.hand.length, isBot: p.isBot, unoSaid: p.unoSaid })),
             topCard: room.topCard,
             currentColor: room.currentColor,
             turnIndex: room.turnIndex,
-            // Полную руку отправляем только самому игроку в updateState через логику сокета
-            // Но здесь мы отправляем общий стейт, карты фильтруются на клиенте или отдельным сообщением
-            // Для упрощения: клиент получает всех, но рендерит "рубашки" для врагов
             fullPlayersForLogic: room.players 
         };
     }
 });
 
-server.listen(process.env.PORT || 3000, () => console.log('Server running'));
+server.listen(process.env.PORT || 3000, () => console.log('Server OK'));
