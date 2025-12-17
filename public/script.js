@@ -1,7 +1,5 @@
-window.addEventListener('load', async () => {
-   // --- ДОБАВЬТЕ ЭТОТ БЛОК В НАЧАЛО public/script.js ---
+// --- ГЛОБАЛЬНЫЕ ФУНКЦИИ (доступны из HTML onclick) ---
 
-// Делаем функции доступными для HTML-обработчика onclick="..."
 window.openModal = (modalId) => {
     // Сначала скрываем все модальные окна, чтобы избежать наложений
     document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden'));
@@ -17,10 +15,10 @@ window.closeModals = () => {
     document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden'));
 };
 
-// ... остальной код script.js
-// 
+// --- ОСНОВНАЯ ЛОГИКА (Запускается после полной загрузки страницы) ---
 
- // ЗАМЕНИТЕ НА СВОИ КЛЮЧИ!
+window.addEventListener('load', async () => {
+    // ЗАМЕНИТЕ НА СВОИ КЛЮЧИ!
     const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
     
@@ -67,9 +65,9 @@ window.closeModals = () => {
         // Загрузка или создание профиля
         let { data: p } = await supabase.from('profiles').select('*').eq('id', u.id).single();
         if(!p) {
-             const shortId = u.id.substr(0, 6);
-             p = { id: u.id, username: u.email.split('@')[0], level: 1, xp: 0, wins: 0, coins: 0, short_id: shortId };
-             await supabase.from('profiles').insert([p]);
+              const shortId = u.id.substr(0, 6);
+              p = { id: u.id, username: u.email.split('@')[0], level: 1, xp: 0, wins: 0, coins: 0, short_id: shortId };
+              await supabase.from('profiles').insert([p]);
         }
         profile = p;
         updateProfileUI();
@@ -204,7 +202,10 @@ window.closeModals = () => {
     window.loadLeaderboard = async (sortBy) => {
         // UI переключение
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        event.target.classList.add('active');
+        // Примечание: 'event.target' может быть неопределенным, если вы вызываете это напрямую.
+        // Для простоты оставим, но в чистом коде нужно передавать 'this' или 'event'
+        // Например, в HTML: onclick="loadLeaderboard('wins', this)"
+        if(event && event.target) event.target.classList.add('active');
 
         const { data } = await supabase.from('profiles').select('username, wins, xp, level').order(sortBy, { ascending: false }).limit(10);
         
@@ -273,18 +274,42 @@ window.closeModals = () => {
     }
 
     // --- ВКЛАДКИ ---
-    window.switchTab = (tabName) => {
+    window.switchTab = (tabName, btnElement) => { // Добавил btnElement
         document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
         document.getElementById(`tab-${tabName}`).classList.remove('hidden');
         
         document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
-        event.target.classList.add('active');
+        // Используем переданный элемент, если он есть, иначе event.target (менее надежно)
+        const targetBtn = btnElement || (event ? event.target : null);
+        if(targetBtn) targetBtn.classList.add('active');
 
-        if(tabName === 'leaderboard') loadLeaderboard('wins');
+        if(tabName === 'leaderboard') window.loadLeaderboard('wins');
         if(tabName === 'friends') loadFriends();
     };
 
-    // --- ИГРОВАЯ ЛОГИКА (ОСТАЛАСЬ ПРЕЖНЕЙ С НЕБОЛЬШИМИ ПРАВКАМИ) ---
+
+    // =========================================================
+    // !!! ИСПРАВЛЕНИЕ: ПРИВЯЗКА КНОПКИ "СОЗДАТЬ" ВНУТРИ МОДАЛКИ !!!
+    // =========================================================
+    const createConfirmButton = document.getElementById('create-confirm');
+    if(createConfirmButton) {
+        createConfirmButton.onclick = () => {
+            const name = document.getElementById('r-name').value;
+            const password = document.getElementById('r-pass').value;
+            
+            // 1. Отправляем команду на сервер
+            socket.emit('createRoom', { name, password });
+
+            // 2. Закрываем модальное окно (используем глобальную функцию)
+            window.closeModals();
+        };
+    } else {
+        console.error("Элемент 'create-confirm' не найден!");
+    }
+    // =========================================================
+
+
+    // --- ИГРОВАЯ ЛОГИКА ---
     // В joinRoom отправляем также скин и баннер
     window.tryJoin = (id, isPriv, btn) => {
         btn.disabled = true;
@@ -368,14 +393,16 @@ window.closeModals = () => {
         if(c === 'wild') { pendingIndex = i; document.getElementById('modal-color').classList.remove('hidden'); }
         else socket.emit('playCard', { roomId: currentRoomId, cardIndex: i });
     };
+    let pendingIndex = -1; // Необходимо объявить для 'clickCard'
     window.pickColor = (c) => {
         socket.emit('playCard', { roomId: currentRoomId, cardIndex: pendingIndex, chosenColor: c });
-        document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden'));
+        window.closeModals();
     };
+    
+    // Привязки к кнопкам (убеждаемся, что они внутри load)
     document.getElementById('draw-btn').onclick = () => socket.emit('drawCard', currentRoomId);
     document.getElementById('deck').onclick = () => socket.emit('drawCard', currentRoomId);
     document.getElementById('uno-btn').onclick = () => socket.emit('sayUno', currentRoomId);
     document.getElementById('bot-btn').onclick = () => socket.emit('addBot', currentRoomId);
     document.getElementById('logout-btn').onclick = async () => { await supabase.auth.signOut(); location.reload(); };
-    window.closeModals = () => document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden'));
 });
