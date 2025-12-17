@@ -180,6 +180,36 @@
             </div>
         </div>
     </div>
+    <button class="nav-btn" onclick="switchTab('chats', this)">💬 Сообщения</button>
+
+<div id="tab-chats" class="tab-content hidden">
+    <h3>Чаты и запросы</h3>
+    <div id="chats-list" class="scroll-list"></div>
+</div>
+
+<div id="modal-chat" class="overlay hidden">
+    <div class="glass-panel modal-box" style="max-width: 400px; width: 95%;">
+        <div class="tab-header">
+            <h3 id="chat-with-name">Чат</h3>
+            <button onclick="closeModals()" class="ios-btn small secondary">✕</button>
+        </div>
+        <div class="chat-container">
+            <div id="chat-messages"></div>
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" class="ios-input" placeholder="Сообщение..." style="margin:0">
+                <button onclick="sendMessage()" class="ios-btn primary small">Отправить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<header class="game-header glass-strip">
+    <div id="turn-txt" class="status-badge">Ожидание...</div>
+    <div style="display:flex; gap:10px">
+        <button onclick="switchTab('friends')" class="ios-btn small secondary">Пригласить +</button>
+        <button id="bot-btn" class="ios-btn small">Add Bot</button>
+    </div>
+</header>
 
 </body>
 </html>

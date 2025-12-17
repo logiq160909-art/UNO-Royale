@@ -1,5 +1,4 @@
 // --- ГЛОБАЛЬНЫЕ ФУНКЦИИ ---
-
 window.openModal = (modalId) => {
     document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden'));
     const modal = document.getElementById(modalId);
@@ -12,7 +11,7 @@ window.closeModals = () => {
 
 window.addEventListener('load', async () => {
     const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co';
-    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
     
     const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
     const socket = io();
@@ -20,6 +19,7 @@ window.addEventListener('load', async () => {
     let user = null;
     let profile = null;
     let currentRoomId = null;
+    let activeChatFriendId = null;
     
     const SHOP_ITEMS = [
         { id: 'av_fox', type: 'avatar', name: 'Лис', price: 500, src: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Felix' },
@@ -50,6 +50,7 @@ window.addEventListener('load', async () => {
 
     async function initLobby(u) {
         user = u;
+        socket.emit('identify', u.id); // Сообщаем серверу ID пользователя для личных уведомлений
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('lobby-screen').classList.remove('hidden');
         
@@ -63,7 +64,8 @@ window.addEventListener('load', async () => {
         updateProfileUI();
         loadShop();
         loadInventory();
-        checkDailyQuest(); // Проверяем квест при входе
+        checkDailyQuest();
+        loadFriends();
     }
 
     function updateProfileUI() {
@@ -81,26 +83,148 @@ window.addEventListener('load', async () => {
 
     function getAvatarSrc(id) {
         if(!id || id === 'default') return 'https://api.dicebear.com/7.x/adventurer/svg?seed=Guest';
+        if(id === 'bot') return 'https://api.dicebear.com/7.x/bottts/svg?seed=Bot';
         const item = SHOP_ITEMS.find(i => i.id === id);
         return item ? item.src : 'https://api.dicebear.com/7.x/adventurer/svg?seed=Guest';
     }
+
+    // --- ДРУЗЬЯ И ЧАТ ---
+    window.addFriend = async () => {
+        const fid = document.getElementById('friend-id-input').value;
+        if(fid.length < 6) return alert("Неверный ID");
+        const { data: target } = await supabase.from('profiles').select('id').eq('short_id', fid).single();
+        if(!target) return alert("Игрок не найден");
+        if(target.id === user.id) return alert("Нельзя добавить самого себя");
+
+        const { error } = await supabase.from('friends').insert([
+            { user_id: user.id, friend_id: target.id, status: 'pending', sender_id: user.id }
+        ]);
+        if(error) return alert("Запрос уже отправлен или ошибка");
+        alert("Запрос отправлен!");
+        loadFriends();
+    };
+
+    async function loadFriends() {
+        // Получаем все связи, где участвует текущий юзер
+        const { data: rels } = await supabase.from('friends')
+            .select('*')
+            .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`);
+
+        const friendsList = document.getElementById('friends-list');
+        const inviteList = document.getElementById('invite-friends-list'); // Список в лобби игры
+        const chatsList = document.getElementById('chats-list');
+        
+        if(!rels || rels.length === 0) {
+            friendsList.innerHTML = '<p class="empty-msg">У вас нет друзей</p>';
+            return;
+        }
+
+        const friendIds = rels.map(r => r.user_id === user.id ? r.friend_id : r.user_id);
+        const { data: profiles } = await supabase.from('profiles').select('*').in('id', friendIds);
+
+        // Рендер подтвержденных друзей
+        const activeFriends = rels.filter(r => r.status === 'accepted');
+        friendsList.innerHTML = profiles.filter(p => activeFriends.some(r => r.user_id === p.id || r.friend_id === p.id)).map(p => `
+            <div class="room-item">
+                <div class="profile-header">
+                    <div class="avatar-container small"><img src="${getAvatarSrc(p.avatar_url)}"></div>
+                    <div><strong>${p.username}</strong><br><small>Wins: ${p.wins}</small></div>
+                </div>
+                <div style="display:flex; gap:5px">
+                    <button class="ios-btn primary small" onclick="openChat('${p.id}', '${p.username}')">💬</button>
+                    ${currentRoomId ? `<button class="ios-btn small" style="background:var(--accent-green)" onclick="inviteFriend('${p.id}')">➕</button>` : ''}
+                </div>
+            </div>
+        `).join('');
+
+        // Рендер запросов (вкладка Чаты/Уведомления)
+        const pendingIn = rels.filter(r => r.status === 'pending' && r.friend_id === user.id);
+        chatsList.innerHTML = (pendingIn.length > 0 ? '<h4>Запросы в друзья</h4>' : '') + pendingIn.map(r => {
+            const p = profiles.find(prof => prof.id === r.user_id);
+            return `
+            <div class="room-item request-item">
+                <span><strong>${p.username}</strong> хочет дружить</span>
+                <div>
+                    <button class="ios-btn primary small" onclick="respondFriend('${r.user_id}', true)">✅</button>
+                    <button class="ios-btn secondary small" onclick="respondFriend('${r.user_id}', false)">❌</button>
+                </div>
+            </div>`;
+        }).join('') + (activeFriends.length > 0 ? '<h4>Диалоги</h4>' : '') + profiles.filter(p => activeFriends.some(r => r.user_id === p.id || r.friend_id === p.id)).map(p => `
+            <div class="room-item" onclick="openChat('${p.id}', '${p.username}')">
+                <strong>${p.username}</strong>
+                <small>Нажмите, чтобы открыть чат</small>
+            </div>
+        `).join('');
+    }
+
+    window.respondFriend = async (otherId, accept) => {
+        if(accept) {
+            await supabase.from('friends').update({ status: 'accepted' }).match({ user_id: otherId, friend_id: user.id });
+        } else {
+            await supabase.from('friends').delete().match({ user_id: otherId, friend_id: user.id });
+        }
+        loadFriends();
+    };
+
+    window.openChat = async (friendId, name) => {
+        activeChatFriendId = friendId;
+        document.getElementById('chat-with-name').innerText = name;
+        openModal('modal-chat');
+        loadMessages();
+    };
+
+    async function loadMessages() {
+        if(!activeChatFriendId) return;
+        const { data } = await supabase.from('messages')
+            .select('*')
+            .or(`and(sender_id.eq.${user.id},receiver_id.eq.${activeChatFriendId}),and(sender_id.eq.${activeChatFriendId},receiver_id.eq.${user.id})`)
+            .order('created_at', { ascending: true });
+        
+        const container = document.getElementById('chat-messages');
+        container.innerHTML = data.map(m => `
+            <div class="msg ${m.sender_id === user.id ? 'sent' : 'received'}">
+                <div class="msg-bubble">${m.text}</div>
+            </div>
+        `).join('');
+        container.scrollTop = container.scrollHeight;
+    }
+
+    window.sendMessage = async () => {
+        const input = document.getElementById('chat-input');
+        const text = input.value.trim();
+        if(!text || !activeChatFriendId) return;
+        
+        await supabase.from('messages').insert([{ sender_id: user.id, receiver_id: activeChatFriendId, text }]);
+        input.value = '';
+        loadMessages();
+    };
+
+    window.inviteFriend = (friendId) => {
+        if(!currentRoomId) return alert("Сначала создайте или войдите в комнату");
+        socket.emit('sendInvite', { to: friendId, fromName: profile.username, roomId: currentRoomId });
+        alert("Приглашение отправлено!");
+    };
+
+    socket.on('receiveInvite', ({ fromName, roomId }) => {
+        if(confirm(`${fromName} приглашает вас в игру! Принять?`)) {
+            socket.emit('joinRoom', { 
+                roomId, username: profile.username,
+                avatar: profile.avatar_url, banner: profile.banner_url 
+            });
+        }
+    });
 
     // --- ОБРАБОТКА КОНЦА ИГРЫ ---
     socket.on('gameEnded', async ({ winnerName, reward }) => {
         const modal = document.getElementById('modal-gameover');
         const title = document.getElementById('go-title');
-        
         title.innerText = reward.won ? "ПОБЕДА!" : "ПОРАЖЕНИЕ";
         title.style.background = reward.won ? "linear-gradient(to right, #f09819, #edde5d)" : "gray";
         title.style.webkitBackgroundClip = "text";
-        
         document.getElementById('go-xp').innerText = `+${reward.xp} XP`;
         document.getElementById('go-coins').innerText = `+${reward.coins} 💰`;
-
         modal.classList.remove('hidden');
 
-        // ЗАПИСЫВАЕМ ПРОГРЕСС КВЕСТА
-        // Используем localStorage, чтобы запомнить, что сегодня игра сыграна
         const todayStr = new Date().toDateString();
         localStorage.setItem('last_played_date', todayStr);
 
@@ -109,21 +233,14 @@ window.addEventListener('load', async () => {
         const newCoins = profile.coins + reward.coins;
         const newWins = reward.won ? profile.wins + 1 : profile.wins;
 
-        const { error } = await supabase.from('profiles').update({
-            xp: newXp, level: newLevel, coins: newCoins, wins: newWins
-        }).eq('id', user.id);
-
-        if(!error) {
-            profile.xp = newXp;
-            profile.level = newLevel;
-            profile.coins = newCoins;
-            profile.wins = newWins;
-        }
+        await supabase.from('profiles').update({ xp: newXp, level: newLevel, coins: newCoins, wins: newWins }).eq('id', user.id);
+        profile.xp = newXp; profile.level = newLevel; profile.coins = newCoins; profile.wins = newWins;
+        updateProfileUI();
     });
 
     window.backToLobby = () => location.reload();
 
-    // --- МАГАЗИН ---
+    // --- МАГАЗИН И ИНВЕНТАРЬ ---
     async function loadShop() {
         const grid = document.getElementById('shop-grid');
         grid.innerHTML = SHOP_ITEMS.map(item => `
@@ -143,9 +260,7 @@ window.addEventListener('load', async () => {
         const { data: has } = await supabase.from('user_items').select('*').eq('user_id', user.id).eq('item_id', itemId);
         if(has && has.length > 0) return alert("Уже куплено!");
 
-        const { error } = await supabase.from('profiles').update({ coins: profile.coins - price }).eq('id', user.id);
-        if(error) return alert("Ошибка транзакции");
-
+        await supabase.from('profiles').update({ coins: profile.coins - price }).eq('id', user.id);
         await supabase.from('user_items').insert([{ user_id: user.id, item_id: itemId, item_type: SHOP_ITEMS.find(i=>i.id===itemId).type }]);
         profile.coins -= price;
         updateProfileUI();
@@ -174,79 +289,6 @@ window.addEventListener('load', async () => {
         loadInventory();
     };
 
-    window.loadLeaderboard = async (sortBy) => {
-        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        if(event && event.target) event.target.classList.add('active');
-        const { data } = await supabase.from('profiles').select('username, wins, xp, level').order(sortBy, { ascending: false }).limit(10);
-        const list = document.getElementById('lb-list');
-        list.innerHTML = data.map((p, i) => `
-            <div class="lb-row"><span>${i+1}</span><span>${p.username}</span><span>${p[sortBy].toFixed(0)}</span></div>
-        `).join('');
-    };
-
-    window.addFriend = async () => {
-        const fid = document.getElementById('friend-id-input').value;
-        if(fid.length < 6) return alert("Неверный ID");
-        const { data: friends } = await supabase.from('profiles').select('id').eq('short_id', fid).single();
-        if(!friends) return alert("Игрок не найден");
-        await supabase.from('friends').insert([{ user_id: user.id, friend_id: friends.id }]);
-        alert("Друг добавлен!");
-        loadFriends();
-    };
-
-    async function loadFriends() {
-        const { data: rels } = await supabase.from('friends').select('friend_id').eq('user_id', user.id);
-        if(!rels || rels.length === 0) {
-            document.getElementById('friends-list').innerHTML = '<p style="text-align:center;opacity:0.5">Список пуст</p>';
-            return;
-        }
-        const friendIds = rels.map(r => r.friend_id);
-        const { data: profiles } = await supabase.from('profiles').select('*').in('id', friendIds);
-        document.getElementById('friends-list').innerHTML = profiles.map(p => `
-            <div class="room-item"><strong>${p.username}</strong><small>${p.wins} wins</small></div>
-        `).join('');
-    }
-
-    // --- ЕЖЕДНЕВНЫЕ ЗАДАНИЯ (ИСПРАВЛЕНО) ---
-    function checkDailyQuest() {
-        const now = new Date();
-        const lastClaim = profile.last_daily_claim ? new Date(profile.last_daily_claim) : new Date(0);
-        const playedDateStr = localStorage.getItem('last_played_date');
-        
-        // Кнопка и текст
-        const btn = document.getElementById('claim-daily');
-        const statusText = document.getElementById('daily-status-text'); // Нужно добавить ID в HTML
-
-        // Если награда уже забрана сегодня
-        if(now.toDateString() === lastClaim.toDateString()) {
-            btn.classList.add('hidden');
-            if(statusText) statusText.innerText = "Выполнено ✅";
-            return;
-        }
-
-        // Если игра была сыграна сегодня
-        if(playedDateStr === now.toDateString()) {
-            btn.classList.remove('hidden'); // Показываем кнопку
-            btn.innerText = "Забрать 100💰";
-            if(statusText) statusText.innerText = "Награда доступна!";
-            
-            btn.onclick = async () => {
-                await supabase.from('profiles').update({ 
-                    coins: profile.coins + 100,
-                    last_daily_claim: now.toISOString()
-                }).eq('id', user.id);
-                profile.coins += 100;
-                updateProfileUI();
-                btn.classList.add('hidden');
-                if(statusText) statusText.innerText = "Выполнено ✅";
-            };
-        } else {
-            // Если еще не сыграл
-            btn.classList.add('hidden');
-            if(statusText) statusText.innerText = "Сыграйте 1 игру ⏳";
-        }
-    }
-
     window.switchTab = (tabName, btnElement) => {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
         document.getElementById(`tab-${tabName}`).classList.remove('hidden');
@@ -254,10 +296,43 @@ window.addEventListener('load', async () => {
         const targetBtn = btnElement || (event ? event.target : null);
         if(targetBtn) targetBtn.classList.add('active');
         if(tabName === 'leaderboard') window.loadLeaderboard('wins');
-        if(tabName === 'friends') loadFriends();
+        if(tabName === 'friends' || tabName === 'chats') loadFriends();
     };
 
-    // Создание комнаты
+    window.loadLeaderboard = async (sortBy) => {
+        const { data } = await supabase.from('profiles').select('username, wins, xp, level').order(sortBy, { ascending: false }).limit(10);
+        const list = document.getElementById('lb-list');
+        list.innerHTML = data.map((p, i) => `<div class="lb-row"><span>${i+1}</span><span>${p.username}</span><span>${p[sortBy].toFixed(0)}</span></div>`).join('');
+    };
+
+    function checkDailyQuest() {
+        const now = new Date();
+        const lastClaim = profile.last_daily_claim ? new Date(profile.last_daily_claim) : new Date(0);
+        const playedDateStr = localStorage.getItem('last_played_date');
+        const btn = document.getElementById('claim-daily');
+        const statusText = document.getElementById('daily-status-text');
+
+        if(now.toDateString() === lastClaim.toDateString()) {
+            btn.classList.add('hidden');
+            if(statusText) statusText.innerText = "Выполнено ✅";
+            return;
+        }
+        if(playedDateStr === now.toDateString()) {
+            btn.classList.remove('hidden');
+            btn.onclick = async () => {
+                await supabase.from('profiles').update({ coins: profile.coins + 100, last_daily_claim: now.toISOString() }).eq('id', user.id);
+                profile.coins += 100;
+                updateProfileUI();
+                btn.classList.add('hidden');
+                if(statusText) statusText.innerText = "Выполнено ✅";
+            };
+        } else {
+            btn.classList.add('hidden');
+            if(statusText) statusText.innerText = "Сыграйте 1 игру ⏳";
+        }
+    }
+
+    // --- GAME ROOMS ---
     const createConfirmButton = document.getElementById('create-confirm');
     if(createConfirmButton) {
         createConfirmButton.onclick = () => {
@@ -268,22 +343,14 @@ window.addEventListener('load', async () => {
         };
     }
 
-    // --- ИГРОВАЯ ЛОГИКА ---
     window.tryJoin = (id, isPriv, btn) => {
-        btn.disabled = true;
-        btn.innerText = "...";
         let pass = isPriv ? prompt('Пароль') : null;
-        socket.emit('joinRoom', { 
-            roomId: id, password: pass, username: profile.username,
-            avatar: profile.avatar_url, banner: profile.banner_url 
-        });
-        setTimeout(() => { btn.disabled = false; btn.innerText = "Войти"; }, 2000);
+        socket.emit('joinRoom', { roomId: id, password: pass, username: profile.username, avatar: profile.avatar_url });
     };
-    
+
     socket.on('roomsList', list => {
         const container = document.getElementById('rooms-list');
-        if(list.length === 0) container.innerHTML = '<div style="text-align:center; opacity:0.5; padding:20px">Нет столов</div>';
-        else container.innerHTML = list.map(r => `
+        container.innerHTML = list.map(r => `
             <div class="room-item">
                 <div><strong>${r.name}</strong><br><small>${r.players}/4</small></div>
                 <button class="ios-btn small" onclick="tryJoin('${r.id}', ${r.isPrivate}, this)">Войти</button>
@@ -294,6 +361,7 @@ window.addEventListener('load', async () => {
         currentRoomId = roomId;
         document.getElementById('lobby-screen').classList.add('hidden');
         document.getElementById('game-screen').classList.remove('hidden');
+        loadFriends(); // Чтобы обновить кнопки приглашения
     });
 
     socket.on('updateState', renderGame);
@@ -304,52 +372,27 @@ window.addEventListener('load', async () => {
         const isTurn = currentP.id === socket.id;
 
         document.getElementById('turn-txt').innerText = isTurn ? "ТВОЙ ХОД" : `Ходит: ${currentP.name}`;
-        document.getElementById('turn-txt').style.color = isTurn ? '#34d399' : '#fff';
-        document.getElementById('direction-arrow').innerText = state.direction === 1 ? '↻' : '↺'; // Текст вместо scale
         document.getElementById('color-dot').style.background = getColorHex(state.currentColor);
-
         if(state.topCard) document.getElementById('pile').innerHTML = renderCard(state.topCard, false);
 
         document.getElementById('opponents').innerHTML = state.players.filter(p => p.id !== socket.id).map(p => `
             <div class="opp-pill ${p.id === currentP.id ? 'opp-active' : ''}">
-                <div style="width:30px;height:30px;border-radius:50%;background:#333;margin-bottom:5px;overflow:hidden">
-                    <img src="${getAvatarSrc(p.avatar)}" style="width:100%">
-                </div>
+                <div class="avatar-container small"><img src="${getAvatarSrc(p.avatar)}"></div>
                 <strong>${p.name}</strong>
                 <small>🃏 ${p.handSize}</small>
-                ${p.unoSaid ? '<span style="color:gold">UNO!</span>' : ''}
             </div>
         `).join('');
 
-        if(me && me.hand) {
-            document.getElementById('hand').innerHTML = me.hand.map((c, i) => renderCard(c, true, i, me.hand.length)).join('');
-        }
-        
-        if(isTurn && me.hand.length === 2 && !state.players.find(p=>p.id===socket.id).unoSaid) {
-            document.getElementById('uno-controls').classList.remove('hidden');
-        } else {
-            document.getElementById('uno-controls').classList.add('hidden');
-        }
+        if(me && me.hand) document.getElementById('hand').innerHTML = me.hand.map((c, i) => renderCard(c, true, i, me.hand.length)).join('');
     }
 
-    // --- ФУНКЦИЯ ОТРИСОВКИ КАРТ С СИМВОЛАМИ ---
     function renderCard(card, isHand, index, total) {
         const colorClass = card.color === 'wild' ? 'wild' : card.color;
-        const style = isHand ? `style="transform: rotate(${(index - (total-1)/2)*5}deg); margin-bottom:${Math.abs((index-(total-1)/2)*5)}px"` : '';
+        const style = isHand ? `style="transform: rotate(${(index - (total-1)/2)*5}deg);"` : '';
         const click = isHand ? `onclick="clickCard(${index}, '${card.color}')"` : '';
-        
-        // ПРЕОБРАЗОВАНИЕ ТЕКСТА В СИМВОЛЫ
-        let displayValue = card.value;
-        if(card.value === 'SKIP') displayValue = '⊘'; // Знак запрета
-        else if(card.value === 'REVERSE') displayValue = '⇄'; // Стрелки
-        else if(card.value === 'WILD') displayValue = '★'; // Звезда
-        else if(card.value === '+4') displayValue = '+4'; // Оставляем
-        else if(card.value === '+2') displayValue = '+2'; // Оставляем
-
-        // Если это Wild, цвет текста должен быть виден на темном фоне
-        const textStyle = card.color === 'wild' ? 'style="color: white; text-shadow: 0 0 5px black;"' : '';
-
-        return `<div class="card ${colorClass}" ${click} ${style}><span ${textStyle}>${displayValue}</span></div>`;
+        let val = card.value;
+        if(val === 'SKIP') val = '⊘'; else if(val === 'REVERSE') val = '⇄'; else if(val === 'WILD') val = '★';
+        return `<div class="card ${colorClass}" ${click} ${style}><span>${val}</span></div>`;
     }
 
     function getColorHex(c) { return {red:'#ff5e62',blue:'#00c6ff',green:'#56ab2f',yellow:'#f09819',wild:'#fff'}[c] || '#fff'; }
@@ -365,7 +408,6 @@ window.addEventListener('load', async () => {
     };
     
     document.getElementById('draw-btn').onclick = () => socket.emit('drawCard', currentRoomId);
-    document.getElementById('deck').onclick = () => socket.emit('drawCard', currentRoomId);
     document.getElementById('uno-btn').onclick = () => socket.emit('sayUno', currentRoomId);
     document.getElementById('bot-btn').onclick = () => socket.emit('addBot', currentRoomId);
     document.getElementById('logout-btn').onclick = async () => { await supabase.auth.signOut(); location.reload(); };

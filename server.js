@@ -9,6 +9,28 @@ const io = new Server(server, { cors: { origin: "*" } });
 app.use(express.static('public'));
 
 let rooms = {};
+// ... (начало то же самое)
+let userSockets = {}; // Храним соответствие userId -> socketId
+
+io.on('connection', (socket) => {
+    socket.on('identify', (userId) => {
+        userSockets[userId] = socket.id;
+        socket.userId = userId;
+    });
+
+    socket.on('sendInvite', ({ to, fromName, roomId }) => {
+        const targetSocketId = userSockets[to];
+        if (targetSocketId) {
+            io.to(targetSocketId).emit('receiveInvite', { fromName, roomId });
+        }
+    });
+
+    socket.on('disconnect', () => {
+        if (socket.userId) delete userSockets[socket.userId];
+    });
+
+    // ... (остальной код server.js остается прежним)
+});
 
 // Экономика
 const REWARDS = {

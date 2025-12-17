@@ -169,3 +169,26 @@ body {
     .hand-container .card { margin-left: -30px; }
     .game-arena { justify-content: flex-start; padding-top: 60px; }
 }
+/* Chat Specific */
+.chat-container { display: flex; flex-direction: column; height: 400px; }
+#chat-messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 10px; }
+.msg { display: flex; width: 100%; }
+.msg.sent { justify-content: flex-end; }
+.msg.received { justify-content: flex-start; }
+.msg-bubble { 
+    max-width: 80%; 
+    padding: 8px 15px; 
+    border-radius: 15px; 
+    background: rgba(255,255,255,0.1); 
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+.msg.sent .msg-bubble { background: var(--primary); color: white; border-bottom-right-radius: 2px; }
+.msg.received .msg-bubble { background: rgba(255,255,255,0.15); border-bottom-left-radius: 2px; }
+
+.chat-input-area { display: flex; gap: 10px; margin-top: 15px; }
+
+.avatar-container.small { width: 35px; height: 35px; }
+.empty-msg { text-align: center; opacity: 0.5; padding: 20px; }
+
+.request-item { background: rgba(52, 211, 153, 0.1) !important; border: 1px solid rgba(52, 211, 153, 0.2); }
