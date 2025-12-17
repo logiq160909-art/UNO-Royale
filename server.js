@@ -61,7 +61,7 @@ async function broadcastGameState(roomId) {
 
     const publicPlayers = room.players.map(p => ({
         id: p.id, name: p.name, handSize: p.hand.length, isBot: p.isBot, unoSaid: p.unoSaid,
-        avatar: p.avatar, banner: p.banner // Передаем косметику
+        avatar: p.avatar, banner: p.banner
     }));
 
     const baseState = {
@@ -109,7 +109,6 @@ io.on('connection', (socket) => {
         if (room.gameStarted) return socket.emit('errorMsg', 'Игра идет');
 
         socket.join(roomId);
-        // Сохраняем косметику игрока в комнате
         room.players.push({ 
             id: socket.id, name: username, hand: [], isBot: false, 
             unoSaid: false, avatar: avatar || 'default', banner: banner || 'default' 
@@ -218,18 +217,15 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ОКОНЧАНИЕ ИГРЫ
     function finishGame(room, winner) {
         room.gameStarted = false;
         
-        // Отправляем результаты каждому игроку
         room.players.forEach(p => {
             const isWinner = p.id === winner.id;
             const reward = isWinner 
                 ? { xp: REWARDS.WIN_XP, coins: REWARDS.WIN_COINS, won: true } 
                 : { xp: REWARDS.LOSE_XP, coins: REWARDS.LOSE_COINS, won: false };
             
-            // Если это бот, нам все равно, если игрок - отправляем данные
             if (!p.isBot) {
                 io.to(p.id).emit('gameEnded', { 
                     winnerName: winner.name,
@@ -238,7 +234,6 @@ io.on('connection', (socket) => {
             }
         });
 
-        // Уничтожаем комнату через небольшую паузу или оставляем для рематча (тут удаляем)
         destroyRoom(room.id);
     }
 

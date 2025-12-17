@@ -1,24 +1,16 @@
-// --- ГЛОБАЛЬНЫЕ ФУНКЦИИ (доступны из HTML onclick) ---
+// --- ГЛОБАЛЬНЫЕ ФУНКЦИИ ---
 
 window.openModal = (modalId) => {
-    // Сначала скрываем все модальные окна, чтобы избежать наложений
     document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden'));
-    
-    // Показываем нужный модал
     const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.classList.remove('hidden');
-    }
+    if (modal) modal.classList.remove('hidden');
 }
 
 window.closeModals = () => {
     document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden'));
 };
 
-// --- ОСНОВНАЯ ЛОГИКА (Запускается после полной загрузки страницы) ---
-
 window.addEventListener('load', async () => {
-    // ЗАМЕНИТЕ НА СВОИ КЛЮЧИ!
     const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
     
@@ -29,7 +21,6 @@ window.addEventListener('load', async () => {
     let profile = null;
     let currentRoomId = null;
     
-    // ПРЕДМЕТЫ МАГАЗИНА (База данных в коде для простоты)
     const SHOP_ITEMS = [
         { id: 'av_fox', type: 'avatar', name: 'Лис', price: 500, src: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Felix' },
         { id: 'av_robot', type: 'avatar', name: 'Робот', price: 1000, src: 'https://api.dicebear.com/7.x/bottts/svg?seed=Zork' },
@@ -62,7 +53,6 @@ window.addEventListener('load', async () => {
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('lobby-screen').classList.remove('hidden');
         
-        // Загрузка или создание профиля
         let { data: p } = await supabase.from('profiles').select('*').eq('id', u.id).single();
         if(!p) {
               const shortId = u.id.substr(0, 6);
@@ -73,7 +63,7 @@ window.addEventListener('load', async () => {
         updateProfileUI();
         loadShop();
         loadInventory();
-        checkDailyQuest();
+        checkDailyQuest(); // Проверяем квест при входе
     }
 
     function updateProfileUI() {
@@ -85,7 +75,6 @@ window.addEventListener('load', async () => {
         document.getElementById('coin-balance').innerText = profile.coins;
         document.getElementById('xp-bar').style.width = ((profile.xp % 100)) + '%';
         
-        // Рендер аватара
         const avatarSrc = getAvatarSrc(profile.avatar_url);
         document.getElementById('my-avatar-display').innerHTML = `<img src="${avatarSrc}">`;
     }
@@ -96,9 +85,8 @@ window.addEventListener('load', async () => {
         return item ? item.src : 'https://api.dicebear.com/7.x/adventurer/svg?seed=Guest';
     }
 
-    // --- ВЫХОД ИЗ ИГРЫ (ОБНОВЛЕНИЕ БАЛАНСА) ---
+    // --- ОБРАБОТКА КОНЦА ИГРЫ ---
     socket.on('gameEnded', async ({ winnerName, reward }) => {
-        // Показываем модалку
         const modal = document.getElementById('modal-gameover');
         const title = document.getElementById('go-title');
         
@@ -107,42 +95,35 @@ window.addEventListener('load', async () => {
         title.style.webkitBackgroundClip = "text";
         
         document.getElementById('go-xp').innerText = `+${reward.xp} XP`;
-        document.getElementById('go-xp').style.color = reward.won ? "#34d399" : "#ccc";
         document.getElementById('go-coins').innerText = `+${reward.coins} 💰`;
 
         modal.classList.remove('hidden');
 
-        // ОБНОВЛЕНИЕ БАЗЫ ДАННЫХ (КЛИЕНТСКАЯ ЧАСТЬ)
-        // Рассчитываем новые значения
+        // ЗАПИСЫВАЕМ ПРОГРЕСС КВЕСТА
+        // Используем localStorage, чтобы запомнить, что сегодня игра сыграна
+        const todayStr = new Date().toDateString();
+        localStorage.setItem('last_played_date', todayStr);
+
         const newXp = profile.xp + reward.xp;
         const newLevel = Math.floor(newXp / 100) + 1;
         const newCoins = profile.coins + reward.coins;
         const newWins = reward.won ? profile.wins + 1 : profile.wins;
 
-        // Отправляем в Supabase
         const { error } = await supabase.from('profiles').update({
-            xp: newXp,
-            level: newLevel,
-            coins: newCoins,
-            wins: newWins
+            xp: newXp, level: newLevel, coins: newCoins, wins: newWins
         }).eq('id', user.id);
 
         if(!error) {
-            // Обновляем локальный стейт
             profile.xp = newXp;
             profile.level = newLevel;
             profile.coins = newCoins;
             profile.wins = newWins;
-        } else {
-            console.error("Ошибка сохранения прогресса:", error);
         }
     });
 
-    window.backToLobby = () => {
-        location.reload(); // Перезагрузка для чистоты
-    };
+    window.backToLobby = () => location.reload();
 
-    // --- МАГАЗИН И ИНВЕНТАРЬ ---
+    // --- МАГАЗИН ---
     async function loadShop() {
         const grid = document.getElementById('shop-grid');
         grid.innerHTML = SHOP_ITEMS.map(item => `
@@ -159,8 +140,6 @@ window.addEventListener('load', async () => {
 
     window.buyItem = async (itemId, price) => {
         if(profile.coins < price) return alert("Недостаточно монет!");
-        
-        // Проверка наличия (упрощено, лучше делать через RPC)
         const { data: has } = await supabase.from('user_items').select('*').eq('user_id', user.id).eq('item_id', itemId);
         if(has && has.length > 0) return alert("Уже куплено!");
 
@@ -168,7 +147,6 @@ window.addEventListener('load', async () => {
         if(error) return alert("Ошибка транзакции");
 
         await supabase.from('user_items').insert([{ user_id: user.id, item_id: itemId, item_type: SHOP_ITEMS.find(i=>i.id===itemId).type }]);
-        
         profile.coins -= price;
         updateProfileUI();
         loadInventory();
@@ -178,8 +156,6 @@ window.addEventListener('load', async () => {
     async function loadInventory() {
         const { data: items } = await supabase.from('user_items').select('*').eq('user_id', user.id);
         const myItems = items || [];
-
-        // Аватары
         const avatarsDiv = document.getElementById('inv-avatars');
         avatarsDiv.innerHTML = `<div class="inv-item ${profile.avatar_url==='default'?'selected':''}" onclick="equip('avatar', 'default')">Default</div>` +
             myItems.filter(i => i.item_type === 'avatar').map(i => {
@@ -195,72 +171,65 @@ window.addEventListener('load', async () => {
         await supabase.from('profiles').update(update).eq('id', user.id);
         profile[type === 'avatar' ? 'avatar_url' : 'banner_url'] = id;
         updateProfileUI();
-        loadInventory(); // Обновить рамки selected
+        loadInventory();
     };
 
-    // --- ЛИДЕРБОРДЫ ---
     window.loadLeaderboard = async (sortBy) => {
-        // UI переключение
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        // Примечание: 'event.target' может быть неопределенным, если вы вызываете это напрямую.
-        // Для простоты оставим, но в чистом коде нужно передавать 'this' или 'event'
-        // Например, в HTML: onclick="loadLeaderboard('wins', this)"
         if(event && event.target) event.target.classList.add('active');
-
         const { data } = await supabase.from('profiles').select('username, wins, xp, level').order(sortBy, { ascending: false }).limit(10);
-        
         const list = document.getElementById('lb-list');
         list.innerHTML = data.map((p, i) => `
-            <div class="lb-row">
-                <span>${i+1}</span>
-                <span>${p.username}</span>
-                <span>${p[sortBy].toFixed(0)}</span>
-            </div>
+            <div class="lb-row"><span>${i+1}</span><span>${p.username}</span><span>${p[sortBy].toFixed(0)}</span></div>
         `).join('');
     };
 
-    // --- ДРУЗЬЯ ---
     window.addFriend = async () => {
         const fid = document.getElementById('friend-id-input').value;
         if(fid.length < 6) return alert("Неверный ID");
-
-        // Ищем юзера по short_id
         const { data: friends } = await supabase.from('profiles').select('id').eq('short_id', fid).single();
         if(!friends) return alert("Игрок не найден");
-
         await supabase.from('friends').insert([{ user_id: user.id, friend_id: friends.id }]);
         alert("Друг добавлен!");
         loadFriends();
     };
 
     async function loadFriends() {
-        // Сложный запрос: получаем ID друзей, потом их профили
         const { data: rels } = await supabase.from('friends').select('friend_id').eq('user_id', user.id);
         if(!rels || rels.length === 0) {
             document.getElementById('friends-list').innerHTML = '<p style="text-align:center;opacity:0.5">Список пуст</p>';
             return;
         }
-
         const friendIds = rels.map(r => r.friend_id);
         const { data: profiles } = await supabase.from('profiles').select('*').in('id', friendIds);
-
         document.getElementById('friends-list').innerHTML = profiles.map(p => `
-            <div class="room-item">
-                <strong>${p.username}</strong>
-                <small>${p.wins} wins</small>
-            </div>
+            <div class="room-item"><strong>${p.username}</strong><small>${p.wins} wins</small></div>
         `).join('');
     }
 
-    // --- ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ---
+    // --- ЕЖЕДНЕВНЫЕ ЗАДАНИЯ (ИСПРАВЛЕНО) ---
     function checkDailyQuest() {
         const now = new Date();
-        const last = profile.last_daily_claim ? new Date(profile.last_daily_claim) : new Date(0);
+        const lastClaim = profile.last_daily_claim ? new Date(profile.last_daily_claim) : new Date(0);
+        const playedDateStr = localStorage.getItem('last_played_date');
         
-        // Если прошел день
-        if(now.getDate() !== last.getDate()) {
-            const btn = document.getElementById('claim-daily');
-            btn.classList.remove('hidden');
+        // Кнопка и текст
+        const btn = document.getElementById('claim-daily');
+        const statusText = document.getElementById('daily-status-text'); // Нужно добавить ID в HTML
+
+        // Если награда уже забрана сегодня
+        if(now.toDateString() === lastClaim.toDateString()) {
+            btn.classList.add('hidden');
+            if(statusText) statusText.innerText = "Выполнено ✅";
+            return;
+        }
+
+        // Если игра была сыграна сегодня
+        if(playedDateStr === now.toDateString()) {
+            btn.classList.remove('hidden'); // Показываем кнопку
+            btn.innerText = "Забрать 100💰";
+            if(statusText) statusText.innerText = "Награда доступна!";
+            
             btn.onclick = async () => {
                 await supabase.from('profiles').update({ 
                     coins: profile.coins + 100,
@@ -269,63 +238,48 @@ window.addEventListener('load', async () => {
                 profile.coins += 100;
                 updateProfileUI();
                 btn.classList.add('hidden');
+                if(statusText) statusText.innerText = "Выполнено ✅";
             };
+        } else {
+            // Если еще не сыграл
+            btn.classList.add('hidden');
+            if(statusText) statusText.innerText = "Сыграйте 1 игру ⏳";
         }
     }
 
-    // --- ВКЛАДКИ ---
-    window.switchTab = (tabName, btnElement) => { // Добавил btnElement
+    window.switchTab = (tabName, btnElement) => {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
         document.getElementById(`tab-${tabName}`).classList.remove('hidden');
-        
         document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
-        // Используем переданный элемент, если он есть, иначе event.target (менее надежно)
         const targetBtn = btnElement || (event ? event.target : null);
         if(targetBtn) targetBtn.classList.add('active');
-
         if(tabName === 'leaderboard') window.loadLeaderboard('wins');
         if(tabName === 'friends') loadFriends();
     };
 
-
-    // =========================================================
-    // !!! ИСПРАВЛЕНИЕ: ПРИВЯЗКА КНОПКИ "СОЗДАТЬ" ВНУТРИ МОДАЛКИ !!!
-    // =========================================================
+    // Создание комнаты
     const createConfirmButton = document.getElementById('create-confirm');
     if(createConfirmButton) {
         createConfirmButton.onclick = () => {
             const name = document.getElementById('r-name').value;
             const password = document.getElementById('r-pass').value;
-            
-            // 1. Отправляем команду на сервер
             socket.emit('createRoom', { name, password });
-
-            // 2. Закрываем модальное окно (используем глобальную функцию)
             window.closeModals();
         };
-    } else {
-        console.error("Элемент 'create-confirm' не найден!");
     }
-    // =========================================================
-
 
     // --- ИГРОВАЯ ЛОГИКА ---
-    // В joinRoom отправляем также скин и баннер
     window.tryJoin = (id, isPriv, btn) => {
         btn.disabled = true;
-        btn.innerText = "Wait...";
+        btn.innerText = "...";
         let pass = isPriv ? prompt('Пароль') : null;
         socket.emit('joinRoom', { 
-            roomId: id, 
-            password: pass, 
-            username: profile.username,
-            avatar: profile.avatar_url,
-            banner: profile.banner_url 
+            roomId: id, password: pass, username: profile.username,
+            avatar: profile.avatar_url, banner: profile.banner_url 
         });
         setTimeout(() => { btn.disabled = false; btn.innerText = "Войти"; }, 2000);
     };
     
-    // Стандартные сокеты
     socket.on('roomsList', list => {
         const container = document.getElementById('rooms-list');
         if(list.length === 0) container.innerHTML = '<div style="text-align:center; opacity:0.5; padding:20px">Нет столов</div>';
@@ -345,13 +299,13 @@ window.addEventListener('load', async () => {
     socket.on('updateState', renderGame);
 
     function renderGame(state) {
-        const me = state.me; // Личные данные
+        const me = state.me;
         const currentP = state.players[state.turnIndex];
         const isTurn = currentP.id === socket.id;
 
         document.getElementById('turn-txt').innerText = isTurn ? "ТВОЙ ХОД" : `Ходит: ${currentP.name}`;
         document.getElementById('turn-txt').style.color = isTurn ? '#34d399' : '#fff';
-        document.getElementById('direction-arrow').style.transform = state.direction === 1 ? 'scaleX(1)' : 'scaleX(-1)';
+        document.getElementById('direction-arrow').innerText = state.direction === 1 ? '↻' : '↺'; // Текст вместо scale
         document.getElementById('color-dot').style.background = getColorHex(state.currentColor);
 
         if(state.topCard) document.getElementById('pile').innerHTML = renderCard(state.topCard, false);
@@ -371,7 +325,6 @@ window.addEventListener('load', async () => {
             document.getElementById('hand').innerHTML = me.hand.map((c, i) => renderCard(c, true, i, me.hand.length)).join('');
         }
         
-        // Кнопка UNO
         if(isTurn && me.hand.length === 2 && !state.players.find(p=>p.id===socket.id).unoSaid) {
             document.getElementById('uno-controls').classList.remove('hidden');
         } else {
@@ -379,27 +332,38 @@ window.addEventListener('load', async () => {
         }
     }
 
+    // --- ФУНКЦИЯ ОТРИСОВКИ КАРТ С СИМВОЛАМИ ---
     function renderCard(card, isHand, index, total) {
         const colorClass = card.color === 'wild' ? 'wild' : card.color;
         const style = isHand ? `style="transform: rotate(${(index - (total-1)/2)*5}deg); margin-bottom:${Math.abs((index-(total-1)/2)*5)}px"` : '';
         const click = isHand ? `onclick="clickCard(${index}, '${card.color}')"` : '';
-        return `<div class="card ${colorClass}" ${click} ${style}><span>${card.value}</span></div>`;
+        
+        // ПРЕОБРАЗОВАНИЕ ТЕКСТА В СИМВОЛЫ
+        let displayValue = card.value;
+        if(card.value === 'SKIP') displayValue = '⊘'; // Знак запрета
+        else if(card.value === 'REVERSE') displayValue = '⇄'; // Стрелки
+        else if(card.value === 'WILD') displayValue = '★'; // Звезда
+        else if(card.value === '+4') displayValue = '+4'; // Оставляем
+        else if(card.value === '+2') displayValue = '+2'; // Оставляем
+
+        // Если это Wild, цвет текста должен быть виден на темном фоне
+        const textStyle = card.color === 'wild' ? 'style="color: white; text-shadow: 0 0 5px black;"' : '';
+
+        return `<div class="card ${colorClass}" ${click} ${style}><span ${textStyle}>${displayValue}</span></div>`;
     }
 
     function getColorHex(c) { return {red:'#ff5e62',blue:'#00c6ff',green:'#56ab2f',yellow:'#f09819',wild:'#fff'}[c] || '#fff'; }
 
-    // Действия игрока
     window.clickCard = (i, c) => {
         if(c === 'wild') { pendingIndex = i; document.getElementById('modal-color').classList.remove('hidden'); }
         else socket.emit('playCard', { roomId: currentRoomId, cardIndex: i });
     };
-    let pendingIndex = -1; // Необходимо объявить для 'clickCard'
+    let pendingIndex = -1;
     window.pickColor = (c) => {
         socket.emit('playCard', { roomId: currentRoomId, cardIndex: pendingIndex, chosenColor: c });
         window.closeModals();
     };
     
-    // Привязки к кнопкам (убеждаемся, что они внутри load)
     document.getElementById('draw-btn').onclick = () => socket.emit('drawCard', currentRoomId);
     document.getElementById('deck').onclick = () => socket.emit('drawCard', currentRoomId);
     document.getElementById('uno-btn').onclick = () => socket.emit('sayUno', currentRoomId);

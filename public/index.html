@@ -44,16 +44,17 @@
                 </div>
 
                 <nav class="nav-menu">
-                    <button class="nav-btn active" onclick="switchTab('rooms')">🎮 Играть</button>
-                    <button class="nav-btn" onclick="switchTab('shop')">🛒 Магазин</button>
-                    <button class="nav-btn" onclick="switchTab('leaderboard')">🏆 Лидеры</button>
-                    <button class="nav-btn" onclick="switchTab('friends')">👥 Друзья</button>
-                    <button class="nav-btn" onclick="switchTab('profile')">👕 Профиль</button>
+                    <button class="nav-btn active" onclick="switchTab('rooms', this)">🎮 Играть</button>
+                    <button class="nav-btn" onclick="switchTab('shop', this)">🛒 Магазин</button>
+                    <button class="nav-btn" onclick="switchTab('leaderboard', this)">🏆 Лидеры</button>
+                    <button class="nav-btn" onclick="switchTab('friends', this)">👥 Друзья</button>
+                    <button class="nav-btn" onclick="switchTab('profile', this)">👕 Профиль</button>
                 </nav>
 
                 <div class="daily-quest-box">
                     <h4>Ежедневное задание</h4>
                     <p>Сыграть 1 игру</p>
+                    <small id="daily-status-text" style="display:block;margin-top:5px;color:#ccc">...</small>
                     <button id="claim-daily" class="ios-btn small hidden">Забрать 100💰</button>
                 </div>
 
@@ -113,7 +114,7 @@
         <header class="game-header glass-strip">
             <div id="turn-txt" class="status-badge">Ожидание...</div>
             <div class="color-indicator-wrapper">
-                <span id="direction-arrow">↻</span>
+                <span id="direction-arrow" style="font-size:1.5rem; margin-right:10px">↻</span>
                 <div id="color-dot" class="color-blob"></div>
             </div>
             <button id="bot-btn" class="ios-btn small">Add Bot</button>
@@ -176,7 +177,7 @@
             </div>
             <div class="modal-actions column">
                 <button onclick="backToLobby()" class="ios-btn primary">В лобби</button>
-                </div>
+            </div>
         </div>
     </div>
 
