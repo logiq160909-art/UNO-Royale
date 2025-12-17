@@ -1,21 +1,29 @@
-:root { 
-    --red: #ef4444; --blue: #3b82f6; --green: #22c55e; --yellow: #eab308; --primary: #6366f1; 
-}
-body { margin: 0; background: #0f172a; color: white; font-family: sans-serif; overflow: hidden; }
+:root { --red: #ef4444; --blue: #3b82f6; --green: #22c55e; --yellow: #eab308; --primary: #6366f1; }
+body, html { margin: 0; padding: 0; height: 100%; background: #0f172a; color: white; font-family: -apple-system, sans-serif; overflow: hidden; }
 .hidden { display: none !important; }
-.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; justify-content: center; align-items: center; z-index: 100; }
-.glass-card { background: rgba(255,255,255,0.1); padding: 30px; border-radius: 20px; text-align: center; width: 300px; }
-.glass-card input { width: 90%; padding: 10px; margin: 5px; border-radius: 5px; border: none; }
-.glow-btn { background: var(--primary); color: white; border: none; padding: 12px; width: 100%; border-radius: 8px; cursor: pointer; font-weight: bold; }
-.game-header { display: flex; justify-content: space-around; padding: 20px; background: rgba(0,0,0,0.3); }
-#color-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; display: inline-block; }
-.center-zone { height: 40vh; display: flex; justify-content: center; align-items: center; gap: 40px; }
-#discard-pile { width: 100px; height: 140px; display: flex; justify-content: center; align-items: center; }
-.card { width: 100px; height: 140px; border-radius: 10px; border: 4px solid white; display: flex; justify-content: center; align-items: center; font-size: 2rem; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-.red { background: var(--red); } .blue { background: var(--blue); } .green { background: var(--green); } .yellow { background: var(--yellow); }
-.card-back { background: #000; color: var(--red); width: 100px; height: 140px; border-radius: 10px; border: 4px solid white; display: flex; justify-content: center; align-items: center; cursor: pointer; }
-.player-area { position: fixed; bottom: 20px; width: 100%; text-align: center; }
-.hand { display: flex; justify-content: center; height: 160px; }
+.screen { height: 100vh; width: 100vw; display: flex; flex-direction: column; }
+
+/* Адаптивность лобби */
+.lobby-container { display: flex; height: 100%; flex-direction: row; }
+@media (max-width: 768px) { .lobby-container { flex-direction: column; } .profile-sidebar { width: 100% !important; height: auto !important; } }
+
+.profile-sidebar { width: 300px; background: rgba(255,255,255,0.05); padding: 20px; border-right: 1px solid rgba(255,255,255,0.1); }
+.rooms-area { flex: 1; padding: 20px; overflow-y: auto; }
+
+.glass-card { background: rgba(255,255,255,0.08); backdrop-filter: blur(10px); padding: 25px; border-radius: 15px; border: 1px solid rgba(255,255,255,0.1); }
+input { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 12px; margin: 8px 0; border-radius: 8px; width: -webkit-fill-available; }
+
+.glow-btn { background: var(--primary); color: white; border: none; padding: 14px; border-radius: 10px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.3s; }
+.secondary-btn { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: white; padding: 10px; width: 100%; border-radius: 8px; margin-top: 10px; cursor: pointer; }
+
+/* Стили карточек комнат */
+.room-item { background: rgba(255,255,255,0.05); margin: 10px 0; padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05); }
+
+/* Игровое поле адаптив */
+.center-zone { flex: 1; display: flex; justify-content: center; align-items: center; gap: 20px; }
+.card { width: 80px; height: 120px; border-radius: 8px; border: 3px solid white; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 1.5rem; }
+@media (min-width: 1024px) { .card { width: 110px; height: 160px; font-size: 2.2rem; } }
+
+.hand { display: flex; justify-content: center; padding-bottom: 20px; }
 .hand .card { margin-left: -40px; transition: 0.2s; cursor: pointer; }
-.hand .card:hover { transform: translateY(-30px); z-index: 10; margin-right: 40px; }
-.game-btn { background: white; border: none; padding: 10px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+.hand .card:hover { transform: translateY(-30px); z-index: 10; margin-right: 30px; }

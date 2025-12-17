@@ -8,7 +8,7 @@ const io = new Server(server);
 
 app.use(express.static('public'));
 
-const rooms = {};
+let rooms = {};
 
 function createDeck() {
     const colors = ['red', 'blue', 'green', 'yellow'];
@@ -22,23 +22,38 @@ function createDeck() {
 }
 
 io.on('connection', (socket) => {
-    socket.on('joinRoom', ({ roomId, username }) => {
-        socket.join(roomId);
-        if (!rooms[roomId]) {
-            rooms[roomId] = {
-                players: [],
-                deck: createDeck(),
-                topCard: null,
-                turnIndex: 0,
-                currentColor: '',
-                gameStarted: false
-            };
-        }
+    // Отправка списка комнат при подключении
+    socket.emit('roomsList', Object.values(rooms).map(r => ({
+        id: r.id, name: r.name, players: r.players.length, isPrivate: !!r.password
+    })));
 
+    socket.on('createRoom', ({ name, password }) => {
+        const roomId = Math.random().toString(36).substr(2, 6);
+        rooms[roomId] = {
+            id: roomId,
+            name: name,
+            password: password || null,
+            players: [],
+            deck: createDeck(),
+            topCard: null,
+            turnIndex: 0,
+            currentColor: '',
+            gameStarted: false
+        };
+        socket.emit('roomCreated', roomId);
+        io.emit('roomsList', Object.values(rooms).map(r => ({
+            id: r.id, name: r.name, players: r.players.length, isPrivate: !!r.password
+        })));
+    });
+
+    socket.on('joinRoom', ({ roomId, password, username }) => {
         const room = rooms[roomId];
-        if (room.players.length < 4) {
-            room.players.push({ id: socket.id, name: username, hand: [] });
-        }
+        if (!room) return socket.emit('errorMsg', 'Комната не найдена');
+        if (room.password && room.password !== password) return socket.emit('errorMsg', 'Неверный пароль');
+        if (room.players.length >= 4) return socket.emit('errorMsg', 'Комната полна');
+
+        socket.join(roomId);
+        room.players.push({ id: socket.id, name: username, hand: [] });
 
         if (room.players.length >= 2 && !room.gameStarted) {
             room.gameStarted = true;
@@ -46,35 +61,33 @@ io.on('connection', (socket) => {
             room.topCard = room.deck.pop();
             room.currentColor = room.topCard.color;
             io.to(roomId).emit('initGame', room);
-        } else if (room.gameStarted) {
-            socket.emit('initGame', room);
         }
-    });
-
-    socket.on('playCard', ({ roomId, cardIndex }) => {
-        const room = rooms[roomId];
-        if (!room) return;
-        const player = room.players[room.turnIndex];
-        if (player.id !== socket.id) return;
-
-        const card = player.hand[cardIndex];
-        if (card.color === room.currentColor || card.value === room.topCard.value) {
-            room.topCard = player.hand.splice(cardIndex, 1)[0];
-            room.currentColor = room.topCard.color;
-            room.turnIndex = (room.turnIndex + 1) % room.players.length;
-            io.to(roomId).emit('updateState', room);
-        }
+        io.emit('roomsList', Object.values(rooms).map(r => ({
+            id: r.id, name: r.name, players: r.players.length, isPrivate: !!r.password
+        })));
     });
 
     socket.on('drawCard', (roomId) => {
         const room = rooms[roomId];
-        if (!room || !room.gameStarted) return;
-        const player = room.players[room.turnIndex];
-        if (player.id !== socket.id) return;
+        if (room) {
+            const player = room.players[room.turnIndex];
+            if (player.id === socket.id) {
+                player.hand.push(room.deck.pop());
+                room.turnIndex = (room.turnIndex + 1) % room.players.length;
+                io.to(roomId).emit('updateState', room);
+            }
+        }
+    });
 
-        player.hand.push(room.deck.pop());
-        room.turnIndex = (room.turnIndex + 1) % room.players.length;
-        io.to(roomId).emit('updateState', room);
+    socket.on('disconnect', () => {
+        // Логика удаления пустых комнат
+        for (let id in rooms) {
+            rooms[id].players = rooms[id].players.filter(p => p.id !== socket.id);
+            if (rooms[id].players.length === 0) delete rooms[id];
+        }
+        io.emit('roomsList', Object.values(rooms).map(r => ({
+            id: r.id, name: r.name, players: r.players.length, isPrivate: !!r.password
+        })));
     });
 });
 

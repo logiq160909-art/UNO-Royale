@@ -1,26 +1,80 @@
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
     const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
     const lib = window.supabase || window.supabasejs;
     const supabase = lib.createClient(supabaseUrl, supabaseKey);
     const socket = io();
-    let currentRoom = null;
+    let currentUser = null;
+    let activeRoomId = null;
 
-    document.getElementById('login-btn').onclick = async () => {
+    // ПРОВЕРКА СЕССИИ (Пункт 2)
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+        showLobby(session.user);
+    }
+
+    async function showLobby(user) {
+        currentUser = user;
+        document.getElementById('auth-screen').classList.add('hidden');
+        document.getElementById('lobby-screen').classList.remove('hidden');
+        
+        // Получаем статистику (Пункт 3)
+        let { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        if(!profile) {
+            const newProf = { id: user.id, username: user.email.split('@')[0] };
+            await supabase.from('profiles').insert([newProf]);
+            profile = newProf;
+        }
+        document.getElementById('prof-name').innerText = profile.username;
+        document.getElementById('prof-lvl').innerText = profile.level || 1;
+        document.getElementById('prof-wins').innerText = profile.wins || 0;
+    }
+
+    // ВХОД
+    document.getElementById('auth-btn').onclick = async () => {
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
-        currentRoom = document.getElementById('room-id').value;
-        if(!email || !password || !currentRoom) return alert("Заполни всё!");
-
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
             await supabase.auth.signUp({ email, password });
-            alert("Аккаунт создан! Нажми ИГРАТЬ еще раз.");
+            alert("Аккаунт создан! Нажмите войти.");
         } else {
-            document.getElementById('auth-overlay').classList.add('hidden');
-            document.getElementById('game-screen').classList.remove('hidden');
-            socket.emit('joinRoom', { roomId: currentRoom, username: email.split('@')[0] });
+            showLobby(data.user);
         }
+    };
+
+    // ВЫХОД
+    document.getElementById('logout-btn').onclick = async () => {
+        await supabase.auth.signOut();
+        location.reload();
+    };
+
+    // КОМНАТЫ
+    document.getElementById('create-room-trigger').onclick = () => document.getElementById('modal-create').classList.remove('hidden');
+    
+    document.getElementById('confirm-create').onclick = () => {
+        const name = document.getElementById('new-room-name').value;
+        const password = document.getElementById('new-room-pass').value;
+        if(name) socket.emit('createRoom', { name, password });
+        document.getElementById('modal-create').classList.add('hidden');
+    };
+
+    socket.on('roomsList', (rooms) => {
+        const list = document.getElementById('rooms-list');
+        list.innerHTML = rooms.map(r => `
+            <div class="room-item">
+                <span>${r.name} (${r.players}/4) ${r.isPrivate ? '🔒' : ''}</span>
+                <button class="glow-btn" style="width:auto" onclick="joinRoom('${r.id}', ${r.isPrivate})">ВОЙТИ</button>
+            </div>
+        `).join('');
+    });
+
+    window.joinRoom = (id, isPrivate) => {
+        let pass = isPrivate ? prompt('Введите пароль:') : null;
+        activeRoomId = id;
+        socket.emit('joinRoom', { roomId: id, password: pass, username: currentUser.email.split('@')[0] });
+        document.getElementById('lobby-screen').classList.add('hidden');
+        document.getElementById('game-screen').classList.remove('hidden');
     };
 
     socket.on('initGame', (state) => updateUI(state));
@@ -30,31 +84,21 @@ window.addEventListener('load', () => {
         const me = state.players.find(p => p.id === socket.id);
         if (!me) return;
 
-        const isMyTurn = state.players[state.turnIndex].id === socket.id;
-        document.getElementById('turn-indicator').innerText = isMyTurn ? "ВАШ ХОД!" : `ХОДИТ: ${state.players[state.turnIndex].name}`;
+        document.getElementById('turn-indicator').innerText = 
+            state.players[state.turnIndex].id === socket.id ? "ВАШ ХОД!" : "ЖДИТЕ...";
         document.getElementById('color-dot').style.backgroundColor = `var(--${state.currentColor})`;
 
         const discard = document.getElementById('discard-pile');
-        discard.innerHTML = '';
-        if(state.topCard) {
-            const cardDiv = document.createElement('div');
-            cardDiv.className = `card ${state.topCard.color}`;
-            cardDiv.innerHTML = `<span>${state.topCard.value}</span>`;
-            discard.appendChild(cardDiv);
-        }
+        discard.innerHTML = `<div class="card ${state.topCard.color}"><span>${state.topCard.value}</span></div>`;
 
         const hand = document.getElementById('player-hand');
-        hand.innerHTML = '';
-        me.hand.forEach((card, i) => {
-            const el = document.createElement('div');
-            el.className = `card ${card.color}`;
-            el.innerHTML = `<span>${card.value}</span>`;
-            if (isMyTurn) {
-                el.onclick = () => socket.emit('playCard', { roomId: currentRoom, cardIndex: i });
-            }
-            hand.appendChild(el);
-        });
+        hand.innerHTML = me.hand.map((c, i) => `
+            <div class="card ${c.color}" onclick="playCard(${i})"><span>${c.value}</span></div>
+        `).join('');
     }
 
-    document.getElementById('draw-btn').onclick = () => socket.emit('drawCard', currentRoom);
+    window.playCard = (i) => socket.emit('playCard', { roomId: activeRoomId, cardIndex: i });
+    document.getElementById('draw-btn').onclick = () => socket.emit('drawCard', activeRoomId);
 });
+
+function closeModal() { document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden')); }
