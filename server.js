@@ -9,22 +9,20 @@ const io = new Server(server, { cors: { origin: "*" } });
 app.use(express.static('public'));
 
 let rooms = {};
+// Карта: UserID -> SocketID (чтобы знать, кому слать инвайт/сообщение)
+const onlineUsers = new Map();
 
 // Экономика
-const REWARDS = {
-    WIN_XP: 100,
-    WIN_COINS: 50,
-    LOSE_XP: 25,
-    LOSE_COINS: 10
-};
+const REWARDS = { WIN_XP: 100, WIN_COINS: 50, LOSE_XP: 25, LOSE_COINS: 10 };
 
+// --- ГЕЙМПЛЕЙ ---
 function createDeck() {
     const colors = ['red', 'blue', 'green', 'yellow'];
     const values = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'SKIP', 'REVERSE', '+2'];
     let deck = [];
     colors.forEach(c => values.forEach(v => {
-        deck.push({ color: c, value: v, uid: Math.random().toString(36) });
-        if (v !== '0') deck.push({ color: c, value: v, uid: Math.random().toString(36) });
+        deck.push({ color: c, value: v, uid: Math.random() });
+        if (v !== '0') deck.push({ color: c, value: v, uid: Math.random() });
     }));
     for (let i = 0; i < 4; i++) {
         deck.push({ color: 'wild', value: 'WILD', uid: Math.random() });
@@ -79,6 +77,39 @@ async function broadcastGameState(roomId) {
 }
 
 io.on('connection', (socket) => {
+    
+    // 1. ОНЛАЙН СТАТУС
+    socket.on('registerUser', (userId) => {
+        onlineUsers.set(userId, socket.id);
+        socket.userId = userId;
+        io.emit('userStatusChanged', { userId, status: 'online' });
+    });
+
+    socket.on('disconnect', () => {
+        if (socket.userId) {
+            onlineUsers.delete(socket.userId);
+            io.emit('userStatusChanged', { userId: socket.userId, status: 'offline' });
+        }
+        // Удаление из комнат (упрощено, но можно добавить)
+    });
+
+    // 2. СОЦИАЛЬНЫЕ ФУНКЦИИ (Инвайты, Чат, Друзья)
+    socket.on('sendFriendRequest', ({ toUserId, fromName }) => {
+        const targetSocket = onlineUsers.get(toUserId);
+        if (targetSocket) io.to(targetSocket).emit('newFriendRequest', { fromName });
+    });
+
+    socket.on('directMessage', ({ toUserId, content, fromId, fromName }) => {
+        const targetSocket = onlineUsers.get(toUserId);
+        if (targetSocket) io.to(targetSocket).emit('receiveMessage', { fromId, content, fromName });
+    });
+
+    socket.on('inviteToGame', ({ toUserId, roomId, fromName }) => {
+        const targetSocket = onlineUsers.get(toUserId);
+        if (targetSocket) io.to(targetSocket).emit('gameInvite', { roomId, fromName });
+    });
+
+    // 3. ИГРОВАЯ ЛОГИКА
     socket.emit('roomsList', getRoomsPublicInfo());
 
     socket.on('createRoom', ({ name, password }) => {
@@ -138,16 +169,14 @@ io.on('connection', (socket) => {
         room.deck = createDeck();
         room.direction = 1;
         room.players.forEach(p => p.hand = room.deck.splice(0, 7));
-        do { room.topCard = room.deck.pop(); } while (room.topCard.color === 'wild');
+        
+        // Первая карта безопасная
+        let safeIdx = room.deck.findIndex(c => !['SKIP', 'REVERSE', '+2', '+4', 'WILD'].includes(c.value) && c.color !== 'wild');
+        room.topCard = room.deck.splice(safeIdx >= 0 ? safeIdx : 0, 1)[0];
+        
         room.currentColor = room.topCard.color;
         room.turnIndex = Math.floor(Math.random() * room.players.length);
         
-        if (room.topCard.value === 'REVERSE') {
-            room.direction = -1;
-            room.turnIndex = getNextPlayerIndex(room, 0);
-            if(room.players.length === 2) nextTurn(room);
-        } else if (room.topCard.value === 'SKIP') nextTurn(room);
-
         broadcastGameState(room.id);
         checkBotTurn(room);
     }
@@ -219,71 +248,37 @@ io.on('connection', (socket) => {
 
     function finishGame(room, winner) {
         room.gameStarted = false;
-        
         room.players.forEach(p => {
             const isWinner = p.id === winner.id;
-            const reward = isWinner 
-                ? { xp: REWARDS.WIN_XP, coins: REWARDS.WIN_COINS, won: true } 
-                : { xp: REWARDS.LOSE_XP, coins: REWARDS.LOSE_COINS, won: false };
-            
+            const reward = isWinner ? { xp: REWARDS.WIN_XP, coins: REWARDS.WIN_COINS, won: true } : { xp: REWARDS.LOSE_XP, coins: REWARDS.LOSE_COINS, won: false };
             if (!p.isBot) {
-                io.to(p.id).emit('gameEnded', { 
-                    winnerName: winner.name,
-                    reward: reward
-                });
+                io.to(p.id).emit('gameEnded', { winnerName: winner.name, reward: reward });
             }
         });
-
         destroyRoom(room.id);
     }
 
     function checkBotTurn(room) {
         if (!room.gameStarted) return;
         const player = room.players[room.turnIndex];
-        
         if (player && player.isBot) {
             setTimeout(() => {
                 if (!rooms[room.id] || !room.gameStarted) return;
-
-                const matchIndex = player.hand.findIndex(c => 
-                    c.color === 'wild' || c.color === room.currentColor || c.value === room.topCard.value
-                );
-                
+                const matchIndex = player.hand.findIndex(c => c.color === 'wild' || c.color === room.currentColor || c.value === room.topCard.value);
                 if (matchIndex !== -1) {
                     const card = player.hand[matchIndex];
                     player.hand.splice(matchIndex, 1);
                     room.topCard = card;
+                    room.currentColor = card.color === 'wild' ? ['red','blue','green','yellow'][Math.floor(Math.random()*4)] : card.color;
                     
-                    if (card.color === 'wild') {
-                        const counts = { red:0, blue:0, green:0, yellow:0 };
-                        player.hand.forEach(c => { if(c.color !== 'wild') counts[c.color]++; });
-                        room.currentColor = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
-                    } else room.currentColor = card.color;
-
-                    if (player.hand.length === 1) {
-                        player.unoSaid = true;
-                        io.to(room.id).emit('unoEffect', player.name);
-                    }
-
-                    if (card.value === 'REVERSE') {
-                        room.direction *= -1;
-                        if (room.players.length === 2) nextTurn(room);
-                    } else if (card.value === 'SKIP') nextTurn(room);
-                    else if (card.value === '+2') {
-                        addCardsToPlayer(room, room.players[getNextPlayerIndex(room, 1)], 2);
-                        nextTurn(room);
-                    } else if (card.value === '+4') {
-                        addCardsToPlayer(room, room.players[getNextPlayerIndex(room, 1)], 4);
-                        nextTurn(room);
-                    }
-
-                    if (player.hand.length === 0) {
-                        finishGame(room, player);
-                        return;
-                    }
+                    if (card.value === '+2') { addCardsToPlayer(room, room.players[getNextPlayerIndex(room, 1)], 2); nextTurn(room); }
+                    else if (card.value === '+4') { addCardsToPlayer(room, room.players[getNextPlayerIndex(room, 1)], 4); nextTurn(room); }
+                    else if (card.value === 'SKIP') nextTurn(room);
+                    else if (card.value === 'REVERSE') { room.direction *= -1; if(room.players.length===2) nextTurn(room); }
+                    
+                    if (player.hand.length === 0) { finishGame(room, player); return; }
                 } else {
                     addCardsToPlayer(room, player, 1);
-                    player.unoSaid = false;
                 }
                 nextTurn(room);
                 broadcastGameState(room.id);
@@ -298,4 +293,4 @@ io.on('connection', (socket) => {
     }
 });
 
-server.listen(process.env.PORT || 3000, () => console.log('Server running on port 3000'));
+server.listen(process.env.PORT || 3000);
