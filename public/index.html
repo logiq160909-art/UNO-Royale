@@ -3,136 +3,183 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>UNO Social</title>
+    <title>UNO Royale</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="script.js" defer></script>
 </head>
 <body>
-    <div class="background-mesh"><div class="orb orb-1"></div></div>
-    <div id="toast-container"></div> <section id="auth-screen" class="screen flex-center">
-        <div class="glass-panel auth-box" style="text-align:center; width:300px">
-            <h1>UNO <span style="font-weight:200">SOCIAL</span></h1>
+    <div class="background-mesh">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <section id="auth-screen" class="screen flex-center">
+        <div class="glass-panel auth-box">
+            <h1 class="logo">UNO <span class="thin">ROYALE</span></h1>
             <input type="email" id="email" placeholder="Email" class="ios-input">
             <input type="password" id="password" placeholder="Пароль" class="ios-input">
             <button id="auth-btn" class="ios-btn primary">Войти</button>
-            <p id="msg" style="color:#faeaac; font-size:0.9rem; margin-top:10px"></p>
+            <p id="msg" class="status-text"></p>
         </div>
     </section>
 
     <section id="lobby-screen" class="screen hidden">
         <div class="layout-container">
             <aside class="glass-panel sidebar">
-                <div class="profile-header" style="display:flex; gap:10px; align-items:center">
-                    <div id="my-avatar" style="width:50px; height:50px; background:#333; border-radius:50%; overflow:hidden"></div>
-                    <div>
-                        <h2 id="u-name" style="margin:0; font-size:1.2rem">...</h2>
-                        <small id="u-id" style="opacity:0.6">ID: ...</small>
+                <div class="profile-header">
+                    <div class="avatar-container" id="my-avatar-display"></div>
+                    <div class="profile-info">
+                        <h2 id="u-name">Player</h2>
+                        <small id="u-short-id" style="opacity: 0.6; display: block; margin-bottom: 5px;">ID: ...</small>
+                        <div class="currency-badge">💰 <span id="coin-balance">0</span></div>
                     </div>
                 </div>
                 
+                <div class="xp-section">
+                    <div class="xp-track"><div id="xp-bar" class="xp-fill"></div></div>
+                    <div class="xp-text"><span id="lvl-txt">Lvl 1</span> • <span id="xp-details">0/100</span></div>
+                </div>
+
                 <nav class="nav-menu">
-                    <button class="nav-btn active" onclick="switchTab('rooms', this)">🎮 Столы</button>
-                    <button class="nav-btn" onclick="switchTab('friends', this)">👥 Друзья <span id="req-badge" style="color:var(--accent-gold)"></span></button>
-                    <button class="nav-btn" onclick="switchTab('chats', this)">💬 Чаты</button>
-                    <button class="nav-btn" onclick="switchTab('profile', this)">⚙️ Профиль</button>
+                    <button class="nav-btn active" onclick="switchTab('rooms', this)">🎮 Играть</button>
+                    <button class="nav-btn" onclick="switchTab('shop', this)">🛒 Магазин</button>
+                    <button class="nav-btn" onclick="switchTab('leaderboard', this)">🏆 Лидеры</button>
+                    <button class="nav-btn" onclick="switchTab('friends', this)">👥 Друзья</button>
+                    <button class="nav-btn" onclick="switchTab('profile', this)">👕 Профиль</button>
                 </nav>
 
-                <button id="logout-btn" class="ios-btn secondary" style="margin-top:auto">Выйти</button>
+                <div class="daily-quest-box">
+                    <h4>Ежедневное задание</h4>
+                    <p>Сыграть 1 игру</p>
+                    <small id="daily-status-text" style="display:block;margin-top:5px;color:#ccc">...</small>
+                    <button id="claim-daily" class="ios-btn small hidden">Забрать 100💰</button>
+                </div>
+
+                <button id="logout-btn" class="ios-btn secondary mt-auto">Выйти</button>
             </aside>
 
             <main class="glass-panel content-area">
                 
                 <div id="tab-rooms" class="tab-content active">
-                    <div style="display:flex; justify-content:space-between; align-items:center">
-                        <h3>Игровые столы</h3>
-                        <button onclick="createRoom()" class="ios-btn primary small">Создать</button>
+                    <div class="tab-header">
+                        <h3>Доступные столы</h3>
+                        <button onclick="openModal('modal-create')" class="ios-btn primary small">Создать стол</button>
                     </div>
                     <div id="rooms-list" class="scroll-list"></div>
                 </div>
 
+                <div id="tab-shop" class="tab-content hidden">
+                    <h3>Магазин предметов</h3>
+                    <div id="shop-grid" class="shop-grid">
+                        </div>
+                </div>
+
+                <div id="tab-leaderboard" class="tab-content hidden">
+                    <div class="lb-filters">
+                        <button class="filter-btn active" onclick="loadLeaderboard('wins')">Победы</button>
+                        <button class="filter-btn" onclick="loadLeaderboard('xp')">Опыт</button>
+                        <button class="filter-btn" onclick="loadLeaderboard('level')">Уровень</button>
+                    </div>
+                    <div class="lb-header-row">
+                        <span>#</span><span>Игрок</span><span>Значение</span>
+                    </div>
+                    <div id="lb-list" class="scroll-list"></div>
+                </div>
+
                 <div id="tab-friends" class="tab-content hidden">
-                    <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:12px; margin-bottom:10px">
-                        <input type="text" id="add-friend-input" placeholder="Введите Short ID друга" class="ios-input" style="margin:0">
-                        <button onclick="sendFriendRequest()" class="ios-btn primary small" style="width:100%; margin-top:5px">Отправить заявку</button>
+                    <div class="friend-add-box">
+                        <input type="text" id="friend-id-input" placeholder="Введите ID друга (6 символов)" class="ios-input">
+                        <button onclick="addFriend()" class="ios-btn primary small">Добавить</button>
                     </div>
-
-                    <div id="requests-section" class="hidden">
-                        <h4 style="color:var(--accent-gold)">Заявки</h4>
-                        <div id="requests-list"></div>
-                        <hr style="border-color:rgba(255,255,255,0.1); margin:10px 0">
-                    </div>
-
-                    <h3>Мои друзья</h3>
+                    <h3>Список друзей</h3>
                     <div id="friends-list" class="scroll-list"></div>
                 </div>
 
-                <div id="tab-chats" class="tab-content hidden">
-                    <div id="chat-select-view">
-                        <h3>Выберите друга для общения</h3>
-                        <div id="chat-friends-list" class="scroll-list"></div>
-                    </div>
-                    <div id="chat-conversation-view" class="chat-container hidden">
-                        <div class="chat-header">
-                            <button onclick="closeChat()" class="ios-btn secondary small">🡠</button>
-                            <h3 id="chat-partner-name" style="margin:0">Name</h3>
-                        </div>
-                        <div id="chat-messages" class="chat-messages"></div>
-                        <div class="chat-input-area">
-                            <input type="text" id="chat-input" placeholder="Сообщение..." class="ios-input" style="margin:0">
-                            <button onclick="sendMessage()" class="ios-btn primary small">></button>
-                        </div>
-                    </div>
-                </div>
-
                 <div id="tab-profile" class="tab-content hidden">
-                    <h3>Ваш профиль</h3>
-                    <p>Победы: <span id="stat-wins">0</span></p>
-                    </div>
+                    <h3>Кастомизация</h3>
+                    <h4>Аватары</h4>
+                    <div id="inv-avatars" class="inventory-row"></div>
+                    <h4 style="margin-top:20px">Баннеры</h4>
+                    <div id="inv-banners" class="inventory-row"></div>
+                </div>
 
             </main>
         </div>
     </section>
 
     <section id="game-screen" class="screen hidden">
-        <header class="game-header">
-            <div id="turn-txt">Ожидание...</div>
-            <div id="color-dot" style="width:20px; height:20px; border-radius:50%; background:white"></div>
-            <button onclick="openInviteModal()" class="ios-btn small secondary">Пригласить друга</button>
+        <header class="game-header glass-strip">
+            <div id="turn-txt" class="status-badge">Ожидание...</div>
+            <div class="color-indicator-wrapper">
+                <span id="direction-arrow" style="font-size:1.5rem; margin-right:10px">↻</span>
+                <div id="color-dot" class="color-blob"></div>
+            </div>
+            <button id="bot-btn" class="ios-btn small">Add Bot</button>
         </header>
 
         <div class="game-arena">
             <div id="opponents" class="opponents-row"></div>
-            <div style="display:flex; gap:20px; align-items:center">
-                <div id="deck" onclick="drawCard()" class="card card-back">UNO</div>
+            <div class="center-table">
+                <div id="deck" class="card card-back">UNO</div>
                 <div id="pile"></div>
             </div>
+            <div id="uno-flash" class="uno-flash hidden">UNO!</div>
         </div>
 
-        <div class="player-hud glass-strip-bottom" style="background:rgba(0,0,0,0.5); padding:10px">
+        <div class="player-hud glass-strip-bottom">
+            <div id="uno-controls" class="hidden floating-action">
+                <button id="uno-btn" class="uno-shout-btn">UNO!</button>
+            </div>
             <div id="hand" class="hand-container"></div>
+            <button id="draw-btn" class="ios-btn draw-action">Взять карту</button>
         </div>
     </section>
 
-    <div id="modal-invite" class="overlay hidden">
-        <div class="glass-panel modal-box" style="text-align:center">
-            <h3>Пригласить друга</h3>
-            <div id="invite-friends-list" class="scroll-list" style="max-height:200px"></div>
-            <button onclick="closeModals()" class="ios-btn secondary">Закрыть</button>
-        </div>
-    </div>
-    
-    <div id="modal-color" class="overlay hidden">
-        <div class="glass-panel" style="text-align:center">
-            <h3>Цвет</h3>
-            <div class="color-options" style="display:grid; grid-template-columns:1fr 1fr; gap:10px">
-                <div class="color-btn c-red" onclick="pick('red')" style="height:50px; background:#ff5e62"></div>
-                <div class="color-btn c-blue" onclick="pick('blue')" style="height:50px; background:#00c6ff"></div>
-                <div class="color-btn c-green" onclick="pick('green')" style="height:50px; background:#56ab2f"></div>
-                <div class="color-btn c-yellow" onclick="pick('yellow')" style="height:50px; background:#f09819"></div>
+    <div id="modal-create" class="overlay hidden">
+        <div class="glass-panel modal-box">
+            <h3>Новая игра</h3>
+            <input type="text" id="r-name" placeholder="Название" class="ios-input">
+            <input type="password" id="r-pass" placeholder="Пароль (необяз.)" class="ios-input">
+            <div class="modal-actions">
+                <button id="create-confirm" class="ios-btn primary">Создать</button>
+                <button onclick="closeModals()" class="ios-btn secondary">Отмена</button>
             </div>
         </div>
     </div>
+
+    <div id="modal-color" class="overlay hidden">
+        <div class="glass-panel modal-box">
+            <h3>Выберите цвет</h3>
+            <div class="color-options">
+                <div class="color-btn c-red" onclick="pickColor('red')"></div>
+                <div class="color-btn c-blue" onclick="pickColor('blue')"></div>
+                <div class="color-btn c-green" onclick="pickColor('green')"></div>
+                <div class="color-btn c-yellow" onclick="pickColor('yellow')"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-gameover" class="overlay hidden">
+        <div class="glass-panel modal-box center-text">
+            <h1 id="go-title" class="go-title">ПОБЕДА!</h1>
+            <div class="rewards-box">
+                <div class="reward-item">
+                    <span>Опыт</span>
+                    <strong id="go-xp" style="color:#34d399">+100 XP</strong>
+                </div>
+                <div class="reward-item">
+                    <span>Монеты</span>
+                    <strong id="go-coins" style="color:#f09819">+50 💰</strong>
+                </div>
+            </div>
+            <div class="modal-actions column">
+                <button onclick="backToLobby()" class="ios-btn primary">В лобби</button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
