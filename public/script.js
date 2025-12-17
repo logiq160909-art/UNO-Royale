@@ -164,14 +164,34 @@ window.addEventListener('load', async () => {
         }).join('');
     }
 
-    window.respondRequest = async (reqId, accept) => {
-        if(accept) {
-            await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', reqId);
-            loadFriends(); // Обновляем список друзей
+   window.respondRequest = async (reqId, accept) => {
+        // Убираем кавычки из ID если они есть, чтобы Supabase понял число
+        const id = String(reqId); 
+
+        if (accept) {
+            const { error } = await supabase
+                .from('friend_requests')
+                .update({ status: 'accepted' })
+                .eq('id', id);
+            
+            if (error) {
+                console.error("Ошибка принятия:", error);
+                return alert("Не удалось принять заявку: " + error.message);
+            }
+            loadFriends();
         } else {
-            await supabase.from('friend_requests').delete().eq('id', reqId);
+            const { error } = await supabase
+                .from('friend_requests')
+                .delete()
+                .eq('id', id);
+                
+            if (error) {
+                console.error("Ошибка отклонения:", error);
+                return alert("Не удалось отклонить заявку: " + error.message);
+            }
         }
-        loadFriendRequests(); // Обновляем список заявок
+        // Обновляем список заявок
+        loadFriendRequests();
     };
 
     // 3. Загрузка списка друзей (для вкладок Друзья и Чаты)
