@@ -1,0 +1,21 @@
+:root { --primary: #6366f1; --red: #ef4444; --blue: #3b82f6; --green: #22c55e; --yellow: #eab308; }
+body { margin: 0; background: #0f172a; color: white; font-family: sans-serif; overflow: hidden; }
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; justify-content: center; align-items: center; z-index: 100; }
+.glass-card { background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); padding: 40px; border-radius: 20px; text-align: center; border: 1px solid rgba(255,255,255,0.2); }
+.hidden { display: none !important; }
+.logo { font-size: 3rem; margin-bottom: 20px; }
+.logo span { color: var(--primary); }
+input { display: block; margin: 10px auto; padding: 10px; border-radius: 5px; border: none; width: 250px; }
+.glow-btn { background: var(--primary); color: white; border: none; padding: 12px 30px; border-radius: 10px; cursor: pointer; font-weight: bold; }
+.game-header { display: flex; justify-content: space-around; padding: 20px; background: rgba(0,0,0,0.5); }
+#color-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; }
+.center-zone { height: 40vh; display: flex; justify-content: center; align-items: center; gap: 30px; }
+.card { width: 80px; height: 120px; border-radius: 10px; border: 3px solid white; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 1.5rem; }
+.card-back { background: black; color: red; border: 3px solid white; width: 80px; height: 120px; border-radius: 10px; display: flex; justify-content: center; align-items: center; cursor: pointer; }
+.red { background: var(--red); } .blue { background: var(--blue); } .green { background: var(--green); } .yellow { background: var(--yellow); } .wild { background: #111; }
+.hand { display: flex; justify-content: center; margin-top: 20px; }
+.hand .card { margin-left: -30px; transition: 0.3s; }
+.hand .card:hover { transform: translateY(-30px); margin-right: 30px; }
+.playable { box-shadow: 0 0 20px white; cursor: pointer; }
+.player-area { position: fixed; bottom: 20px; width: 100%; text-align: center; }
+.game-btn { background: #333; color: white; border: 1px solid white; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-top: 10px; }

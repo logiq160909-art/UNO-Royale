@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>UNO Royale Online</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <div id="auth-overlay" class="overlay">
+        <div class="glass-card">
+            <h1 class="logo">UNO<span>ROYAL</span></h1>
+            <input type="email" id="email" placeholder="Email">
+            <input type="password" id="password" placeholder="Password">
+            <button id="login-btn" class="glow-btn">ВОЙТИ / РЕГИСТРАЦИЯ</button>
+        </div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+        <div class="game-header">
+            <div id="turn-indicator">Ожидание игроков...</div>
+            <div class="status-box">ЦВЕТ: <div id="color-dot"></div></div>
+        </div>
+        <div class="center-zone">
+            <div id="draw-pile" class="card-back">UNO</div>
+            <div id="discard-pile"></div>
+        </div>
+        <div id="opponents"></div>
+        <div class="player-area">
+            <div id="player-hand" class="hand"></div>
+            <button id="draw-btn" class="game-btn">ВЗЯТЬ КАРТУ</button>
+        </div>
+    </div>
+</body>
+</html>
