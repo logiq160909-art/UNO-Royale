@@ -2,14 +2,10 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UNO Royale Online</title>
     <link rel="stylesheet" href="style.css">
-    
     <script src="/socket.io/socket.io.js"></script>
-    
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-    
     <script src="script.js" defer></script>
 </head>
 <body>
@@ -17,15 +13,15 @@
         <div class="glass-card">
             <h1>UNO<span>ROYAL</span></h1>
             <input type="email" id="email" placeholder="Email">
-            <input type="password" id="password" placeholder="Пароль">
+            <input type="password" id="password" placeholder="Password">
+            <input type="text" id="room-id" placeholder="ID Комнаты (например: 1)">
             <button id="login-btn" class="glow-btn">ИГРАТЬ</button>
-            <p id="status-msg" style="color: #ef4444; margin-top: 10px;"></p>
         </div>
     </div>
 
     <div id="game-screen" class="hidden">
         <div class="game-header">
-            <div id="turn-indicator">ОЖИДАНИЕ ИГРОКОВ...</div>
+            <div id="turn-indicator">ОЖИДАНИЕ...</div>
             <div class="status-box">ЦВЕТ: <div id="color-dot"></div></div>
         </div>
         <div id="opponents"></div>
