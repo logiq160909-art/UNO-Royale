@@ -10,7 +10,6 @@
     <script src="script.js" defer></script>
 </head>
 <body>
-
     <div class="background-mesh">
         <div class="orb orb-1"></div>
         <div class="orb orb-2"></div>
@@ -30,21 +29,82 @@
     <section id="lobby-screen" class="screen hidden">
         <div class="layout-container">
             <aside class="glass-panel sidebar">
-                <div class="profile-info">
-                    <h2 id="u-name">Player</h2>
-                    <div class="xp-track">
-                        <div id="xp-bar" class="xp-fill"></div>
+                <div class="profile-header">
+                    <div class="avatar-container" id="my-avatar-display"></div>
+                    <div class="profile-info">
+                        <h2 id="u-name">Player</h2>
+                        <small id="u-short-id" style="opacity: 0.6; display: block; margin-bottom: 5px;">ID: ...</small>
+                        <div class="currency-badge">💰 <span id="coin-balance">0</span></div>
                     </div>
-                    <small id="lvl-txt">Lvl 1</small>
                 </div>
-                <div class="sidebar-actions">
-                    <button onclick="openModal()" class="ios-btn primary">Создать стол</button>
-                    <button id="logout-btn" class="ios-btn secondary">Выйти</button>
+                
+                <div class="xp-section">
+                    <div class="xp-track"><div id="xp-bar" class="xp-fill"></div></div>
+                    <div class="xp-text"><span id="lvl-txt">Lvl 1</span> • <span id="xp-details">0/100</span></div>
                 </div>
+
+                <nav class="nav-menu">
+                    <button class="nav-btn active" onclick="switchTab('rooms')">🎮 Играть</button>
+                    <button class="nav-btn" onclick="switchTab('shop')">🛒 Магазин</button>
+                    <button class="nav-btn" onclick="switchTab('leaderboard')">🏆 Лидеры</button>
+                    <button class="nav-btn" onclick="switchTab('friends')">👥 Друзья</button>
+                    <button class="nav-btn" onclick="switchTab('profile')">👕 Профиль</button>
+                </nav>
+
+                <div class="daily-quest-box">
+                    <h4>Ежедневное задание</h4>
+                    <p>Сыграть 1 игру</p>
+                    <button id="claim-daily" class="ios-btn small hidden">Забрать 100💰</button>
+                </div>
+
+                <button id="logout-btn" class="ios-btn secondary mt-auto">Выйти</button>
             </aside>
+
             <main class="glass-panel content-area">
-                <h3>Доступные столы</h3>
-                <div id="rooms-list" class="scroll-list"></div>
+                
+                <div id="tab-rooms" class="tab-content active">
+                    <div class="tab-header">
+                        <h3>Доступные столы</h3>
+                        <button onclick="openModal('modal-create')" class="ios-btn primary small">Создать стол</button>
+                    </div>
+                    <div id="rooms-list" class="scroll-list"></div>
+                </div>
+
+                <div id="tab-shop" class="tab-content hidden">
+                    <h3>Магазин предметов</h3>
+                    <div id="shop-grid" class="shop-grid">
+                        </div>
+                </div>
+
+                <div id="tab-leaderboard" class="tab-content hidden">
+                    <div class="lb-filters">
+                        <button class="filter-btn active" onclick="loadLeaderboard('wins')">Победы</button>
+                        <button class="filter-btn" onclick="loadLeaderboard('xp')">Опыт</button>
+                        <button class="filter-btn" onclick="loadLeaderboard('level')">Уровень</button>
+                    </div>
+                    <div class="lb-header-row">
+                        <span>#</span><span>Игрок</span><span>Значение</span>
+                    </div>
+                    <div id="lb-list" class="scroll-list"></div>
+                </div>
+
+                <div id="tab-friends" class="tab-content hidden">
+                    <div class="friend-add-box">
+                        <input type="text" id="friend-id-input" placeholder="Введите ID друга (6 символов)" class="ios-input">
+                        <button onclick="addFriend()" class="ios-btn primary small">Добавить</button>
+                    </div>
+                    <h3>Список друзей</h3>
+                    <div id="friends-list" class="scroll-list"></div>
+                </div>
+
+                <div id="tab-profile" class="tab-content hidden">
+                    <h3>Кастомизация</h3>
+                    <h4>Аватары</h4>
+                    <div id="inv-avatars" class="inventory-row"></div>
+                    <h4 style="margin-top:20px">Баннеры</h4>
+                    <div id="inv-banners" class="inventory-row"></div>
+                </div>
+
             </main>
         </div>
     </section>
@@ -53,7 +113,7 @@
         <header class="game-header glass-strip">
             <div id="turn-txt" class="status-badge">Ожидание...</div>
             <div class="color-indicator-wrapper">
-                <span id="direction-arrow" style="margin-right:10px; font-size:1.5rem">↻</span>
+                <span id="direction-arrow">↻</span>
                 <div id="color-dot" class="color-blob"></div>
             </div>
             <button id="bot-btn" class="ios-btn small">Add Bot</button>
@@ -61,7 +121,6 @@
 
         <div class="game-arena">
             <div id="opponents" class="opponents-row"></div>
-            
             <div class="center-table">
                 <div id="deck" class="card card-back">UNO</div>
                 <div id="pile"></div>
@@ -73,10 +132,7 @@
             <div id="uno-controls" class="hidden floating-action">
                 <button id="uno-btn" class="uno-shout-btn">UNO!</button>
             </div>
-            
-            <div id="hand" class="hand-container">
-                </div>
-            
+            <div id="hand" class="hand-container"></div>
             <button id="draw-btn" class="ios-btn draw-action">Взять карту</button>
         </div>
     </section>
@@ -104,5 +160,25 @@
             </div>
         </div>
     </div>
+
+    <div id="modal-gameover" class="overlay hidden">
+        <div class="glass-panel modal-box center-text">
+            <h1 id="go-title" class="go-title">ПОБЕДА!</h1>
+            <div class="rewards-box">
+                <div class="reward-item">
+                    <span>Опыт</span>
+                    <strong id="go-xp" style="color:#34d399">+100 XP</strong>
+                </div>
+                <div class="reward-item">
+                    <span>Монеты</span>
+                    <strong id="go-coins" style="color:#f09819">+50 💰</strong>
+                </div>
+            </div>
+            <div class="modal-actions column">
+                <button onclick="backToLobby()" class="ios-btn primary">В лобби</button>
+                </div>
+        </div>
+    </div>
+
 </body>
 </html>
