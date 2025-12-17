@@ -9,8 +9,7 @@ const io = new Server(server, { cors: { origin: "*" } });
 app.use(express.static('public'));
 
 let rooms = {};
-// Карта: UserID -> SocketID (чтобы знать, кому слать инвайт/сообщение)
-const onlineUsers = new Map();
+const onlineUsers = new Map(); // UserID -> SocketID
 
 // Экономика
 const REWARDS = { WIN_XP: 100, WIN_COINS: 50, LOSE_XP: 25, LOSE_COINS: 10 };
@@ -90,10 +89,9 @@ io.on('connection', (socket) => {
             onlineUsers.delete(socket.userId);
             io.emit('userStatusChanged', { userId: socket.userId, status: 'offline' });
         }
-        // Удаление из комнат (упрощено, но можно добавить)
     });
 
-    // 2. СОЦИАЛЬНЫЕ ФУНКЦИИ (Инвайты, Чат, Друзья)
+    // 2. СОЦИАЛЬНЫЕ ФУНКЦИИ
     socket.on('sendFriendRequest', ({ toUserId, fromName }) => {
         const targetSocket = onlineUsers.get(toUserId);
         if (targetSocket) io.to(targetSocket).emit('newFriendRequest', { fromName });
@@ -170,7 +168,6 @@ io.on('connection', (socket) => {
         room.direction = 1;
         room.players.forEach(p => p.hand = room.deck.splice(0, 7));
         
-        // Первая карта безопасная
         let safeIdx = room.deck.findIndex(c => !['SKIP', 'REVERSE', '+2', '+4', 'WILD'].includes(c.value) && c.color !== 'wild');
         room.topCard = room.deck.splice(safeIdx >= 0 ? safeIdx : 0, 1)[0];
         

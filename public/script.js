@@ -1,8 +1,6 @@
-const socket = io();
-const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-
+// Переменные объявляем глобально
+let socket;
+let supabase;
 let user = null, profile = null, currentRoomId = null, currentChatPartner = null, pendingIndex = null;
 
 const SHOP_ITEMS = [
@@ -20,12 +18,28 @@ function showToast(title, msg, actionBtn = null) {
     setTimeout(() => box.remove(), 5000);
 }
 
+// ГЛАВНЫЙ ЗАПУСК
 window.addEventListener('load', async () => {
+    // 1. Инициализация библиотек с защитой от сбоев
+    const sbLib = window.supabase || window.supabasejs;
+    if (!sbLib) return alert("Ошибка загрузки библиотек. Обновите страницу.");
+    
+    const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
+    
+    supabase = sbLib.createClient(supabaseUrl, supabaseKey);
+    socket = io();
+
+    // 2. Проверка сессии
     const { data: { session } } = await supabase.auth.getSession();
     if(session) initLobby(session.user);
 
+    // 3. Обработчик входа
     document.getElementById('auth-btn').onclick = async () => {
-        const email = document.getElementById('email').value, password = document.getElementById('password').value;
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        if(!email || !password) return alert("Введите данные");
+        
         let { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if(error) {
             let { data: up, error: upErr } = await supabase.auth.signUp({ email, password });
@@ -48,11 +62,7 @@ async function initLobby(u) {
     }
     profile = p;
     updateProfileUI();
-    loadFriends();
-    loadRequests();
-    loadShop();
-    loadInventory();
-    checkDailyQuest();
+    loadFriends(); loadRequests(); loadShop(); loadInventory(); checkDailyQuest();
 }
 
 function updateProfileUI() {
@@ -168,25 +178,35 @@ window.sendInvite = (fid) => {
     alert("Отправлено"); window.closeModals();
 };
 
-socket.on('newFriendRequest', ({ fromName }) => showToast('Заявка', `От: ${fromName}`));
-socket.on('receiveMessage', ({ fromId, content, fromName }) => {
-    if(currentChatPartner && currentChatPartner.id === fromId) {
-        displayMessage({ sender_id: fromId, content });
-    } else showToast('Сообщение', `${fromName}: ${content}`);
-});
-socket.on('gameInvite', ({ roomId, fromName }) => {
-    const btn = document.createElement('button');
-    btn.className = 'ios-btn small primary';
-    btn.innerText = "Играть";
-    btn.onclick = () => socket.emit('joinRoom', { roomId, username: profile.username, avatar: profile.avatar_url });
-    showToast('Приглашение', `${fromName} зовет!`, btn);
-});
+if (typeof socket !== 'undefined') {
+    socket.on('newFriendRequest', ({ fromName }) => showToast('Заявка', `От: ${fromName}`));
+    socket.on('receiveMessage', ({ fromId, content, fromName }) => {
+        if(currentChatPartner && currentChatPartner.id === fromId) {
+            displayMessage({ sender_id: fromId, content });
+        } else showToast('Сообщение', `${fromName}: ${content}`);
+    });
+    socket.on('gameInvite', ({ roomId, fromName }) => {
+        const btn = document.createElement('button');
+        btn.className = 'ios-btn small primary';
+        btn.innerText = "Играть";
+        btn.onclick = () => socket.emit('joinRoom', { roomId, username: profile.username, avatar: profile.avatar_url });
+        showToast('Приглашение', `${fromName} зовет!`, btn);
+    });
+    // --- GAME LOGIC ---
+    socket.on('roomsList', list => {
+        document.getElementById('rooms-list').innerHTML = list.map(r => `
+            <div class="room-item"><span>${r.name} (${r.players}/4)</span><button class="ios-btn small" onclick="tryJoin('${r.id}', ${r.isPrivate}, this)">Войти</button></div>`).join('');
+    });
+    
+    socket.on('joinSuccess', (id) => {
+        currentRoomId = id;
+        document.getElementById('lobby-screen').classList.add('hidden');
+        document.getElementById('game-screen').classList.remove('hidden');
+    });
 
-// --- GAME LOGIC ---
-socket.on('roomsList', list => {
-    document.getElementById('rooms-list').innerHTML = list.map(r => `
-        <div class="room-item"><span>${r.name} (${r.players}/4)</span><button class="ios-btn small" onclick="tryJoin('${r.id}', ${r.isPrivate}, this)">Войти</button></div>`).join('');
-});
+    socket.on('updateState', renderGame);
+}
+
 window.createRoom = () => {
     document.getElementById('modal-create').classList.remove('hidden');
     document.getElementById('create-confirm').onclick = () => {
@@ -200,13 +220,6 @@ window.tryJoin = (id, isPriv, btn) => {
     socket.emit('joinRoom', { roomId: id, password: pass, username: profile.username, avatar: profile.avatar_url });
     setTimeout(() => { btn.disabled = false; btn.innerText = "Войти"; }, 2000);
 };
-socket.on('joinSuccess', (id) => {
-    currentRoomId = id;
-    document.getElementById('lobby-screen').classList.add('hidden');
-    document.getElementById('game-screen').classList.remove('hidden');
-});
-
-socket.on('updateState', renderGame);
 
 function renderGame(state) {
     const me = state.me;
@@ -249,21 +262,23 @@ document.getElementById('deck').onclick = () => socket.emit('drawCard', currentR
 document.getElementById('uno-btn').onclick = () => socket.emit('sayUno', currentRoomId);
 
 // --- END GAME & QUESTS ---
-socket.on('gameEnded', async ({ winnerName, reward }) => {
-    document.getElementById('modal-gameover').classList.remove('hidden');
-    document.getElementById('go-title').innerText = reward.won ? "ПОБЕДА!" : "ПОРАЖЕНИЕ";
-    document.getElementById('go-xp').innerText = `+${reward.xp}`;
-    document.getElementById('go-coins').innerText = `+${reward.coins}`;
-    
-    // Сохраняем факт игры СЕГОДНЯ
-    localStorage.setItem('last_played_date', new Date().toDateString());
+if (typeof socket !== 'undefined') {
+    socket.on('gameEnded', async ({ winnerName, reward }) => {
+        document.getElementById('modal-gameover').classList.remove('hidden');
+        document.getElementById('go-title').innerText = reward.won ? "ПОБЕДА!" : "ПОРАЖЕНИЕ";
+        document.getElementById('go-xp').innerText = `+${reward.xp}`;
+        document.getElementById('go-coins').innerText = `+${reward.coins}`;
+        
+        // Сохраняем факт игры СЕГОДНЯ
+        localStorage.setItem('last_played_date', new Date().toDateString());
 
-    const { error } = await supabase.from('profiles').update({
-        xp: profile.xp + reward.xp, coins: profile.coins + reward.coins, 
-        wins: reward.won ? profile.wins + 1 : profile.wins
-    }).eq('id', user.id);
-    if(!error) { profile.xp += reward.xp; profile.coins += reward.coins; }
-});
+        const { error } = await supabase.from('profiles').update({
+            xp: profile.xp + reward.xp, coins: profile.coins + reward.coins, 
+            wins: reward.won ? profile.wins + 1 : profile.wins
+        }).eq('id', user.id);
+        if(!error) { profile.xp += reward.xp; profile.coins += reward.coins; }
+    });
+}
 
 function checkDailyQuest() {
     const now = new Date().toDateString();
@@ -292,7 +307,6 @@ window.switchTab = (tab, btn) => {
     if(btn) btn.classList.add('active');
 };
 
-// --- SHOP (Упрощено для краткости) ---
-async function loadShop() { /* Код магазина без изменений */ }
+async function loadShop() { /* Код магазина (для краткости) */ }
 window.buyItem = async (id, pr) => { /* Код покупки */ }
 async function loadInventory() { /* Код инвентаря */ }

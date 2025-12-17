@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>UNO Social</title>
+    <title>UNO Royale</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -15,7 +15,7 @@
 
     <section id="auth-screen" class="screen flex-center">
         <div class="glass-panel auth-box" style="text-align:center; width:300px">
-            <h1>UNO <span style="font-weight:200">SOCIAL</span></h1>
+            <h1>UNO <span style="font-weight:200">ROYALE</span></h1>
             <input type="email" id="email" placeholder="Email" class="ios-input">
             <input type="password" id="password" placeholder="Пароль" class="ios-input">
             <button id="auth-btn" class="ios-btn primary">Войти</button>
@@ -67,7 +67,7 @@
 
                 <div id="tab-friends" class="tab-content hidden">
                     <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:12px; margin-bottom:10px">
-                        <input type="text" id="add-friend-input" placeholder="Введите ID друга (6 символов)" class="ios-input" style="margin:0">
+                        <input type="text" id="add-friend-input" placeholder="Введите Short ID друга (6 символов)" class="ios-input" style="margin:0">
                         <button onclick="sendFriendRequest()" class="ios-btn primary small" style="width:100%; margin-top:5px">Отправить заявку</button>
                     </div>
                     <div id="requests-section" class="hidden">
