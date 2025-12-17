@@ -50,7 +50,7 @@ window.addEventListener('load', async () => {
 
     async function initLobby(u) {
         user = u;
-        socket.emit('identify', u.id); // Сообщаем серверу ID пользователя для личных уведомлений
+        socket.emit('identify', user.id);
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('lobby-screen').classList.remove('hidden');
         
@@ -65,7 +65,6 @@ window.addEventListener('load', async () => {
         loadShop();
         loadInventory();
         checkDailyQuest();
-        loadFriends();
     }
 
     function updateProfileUI() {
@@ -88,86 +87,57 @@ window.addEventListener('load', async () => {
         return item ? item.src : 'https://api.dicebear.com/7.x/adventurer/svg?seed=Guest';
     }
 
-    // --- ДРУЗЬЯ И ЧАТ ---
+    // --- СИСТЕМА ДРУЗЕЙ И ЧАТА ---
     window.addFriend = async () => {
         const fid = document.getElementById('friend-id-input').value;
         if(fid.length < 6) return alert("Неверный ID");
         const { data: target } = await supabase.from('profiles').select('id').eq('short_id', fid).single();
         if(!target) return alert("Игрок не найден");
-        if(target.id === user.id) return alert("Нельзя добавить самого себя");
-
-        const { error } = await supabase.from('friends').insert([
-            { user_id: user.id, friend_id: target.id, status: 'pending', sender_id: user.id }
-        ]);
-        if(error) return alert("Запрос уже отправлен или ошибка");
+        await supabase.from('friends').insert([{ user_id: user.id, friend_id: target.id, sender_id: user.id }]);
         alert("Запрос отправлен!");
         loadFriends();
     };
 
     async function loadFriends() {
-        // Получаем все связи, где участвует текущий юзер
-        const { data: rels } = await supabase.from('friends')
-            .select('*')
-            .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`);
-
-        const friendsList = document.getElementById('friends-list');
-        const inviteList = document.getElementById('invite-friends-list'); // Список в лобби игры
-        const chatsList = document.getElementById('chats-list');
-        
-        if(!rels || rels.length === 0) {
-            friendsList.innerHTML = '<p class="empty-msg">У вас нет друзей</p>';
-            return;
-        }
-
+        const { data: rels } = await supabase.from('friends').select('*').or(`user_id.eq.${user.id},friend_id.eq.${user.id}`);
+        if(!rels) return;
         const friendIds = rels.map(r => r.user_id === user.id ? r.friend_id : r.user_id);
         const { data: profiles } = await supabase.from('profiles').select('*').in('id', friendIds);
 
-        // Рендер подтвержденных друзей
-        const activeFriends = rels.filter(r => r.status === 'accepted');
-        friendsList.innerHTML = profiles.filter(p => activeFriends.some(r => r.user_id === p.id || r.friend_id === p.id)).map(p => `
+        const accepted = rels.filter(r => r.status === 'accepted');
+        
+        // Вкладка Друзья
+        document.getElementById('friends-list').innerHTML = profiles.filter(p => accepted.some(r => r.user_id === p.id || r.friend_id === p.id)).map(p => `
             <div class="room-item">
-                <div class="profile-header">
-                    <div class="avatar-container small"><img src="${getAvatarSrc(p.avatar_url)}"></div>
-                    <div><strong>${p.username}</strong><br><small>Wins: ${p.wins}</small></div>
-                </div>
+                <strong>${p.username}</strong>
                 <div style="display:flex; gap:5px">
-                    <button class="ios-btn primary small" onclick="openChat('${p.id}', '${p.username}')">💬</button>
-                    ${currentRoomId ? `<button class="ios-btn small" style="background:var(--accent-green)" onclick="inviteFriend('${p.id}')">➕</button>` : ''}
+                    <button class="ios-btn small" onclick="openChat('${p.id}', '${p.username}')">💬</button>
+                    ${currentRoomId ? `<button class="ios-btn small" style="background:#34d399" onclick="invite('${p.id}')">➕</button>` : ''}
                 </div>
             </div>
-        `).join('');
+        `).join('') || '<p style="text-align:center; opacity:0.5">Список пуст</p>';
 
-        // Рендер запросов (вкладка Чаты/Уведомления)
-        const pendingIn = rels.filter(r => r.status === 'pending' && r.friend_id === user.id);
-        chatsList.innerHTML = (pendingIn.length > 0 ? '<h4>Запросы в друзья</h4>' : '') + pendingIn.map(r => {
-            const p = profiles.find(prof => prof.id === r.user_id);
-            return `
-            <div class="room-item request-item">
-                <span><strong>${p.username}</strong> хочет дружить</span>
-                <div>
-                    <button class="ios-btn primary small" onclick="respondFriend('${r.user_id}', true)">✅</button>
-                    <button class="ios-btn secondary small" onclick="respondFriend('${r.user_id}', false)">❌</button>
-                </div>
-            </div>`;
-        }).join('') + (activeFriends.length > 0 ? '<h4>Диалоги</h4>' : '') + profiles.filter(p => activeFriends.some(r => r.user_id === p.id || r.friend_id === p.id)).map(p => `
+        // Вкладка Чаты (Запросы + Диалоги)
+        const pending = rels.filter(r => r.status === 'pending' && r.friend_id === user.id);
+        document.getElementById('chats-list').innerHTML = pending.map(r => {
+            const p = profiles.find(pr => pr.id === r.user_id);
+            return `<div class="room-item"><span>Запрос от <b>${p.username}</b></span><button onclick="respondFriend('${r.user_id}', true)" class="ios-btn primary small">✅</button></div>`;
+        }).join('') + profiles.filter(p => accepted.some(r => r.user_id === p.id || r.friend_id === p.id)).map(p => `
             <div class="room-item" onclick="openChat('${p.id}', '${p.username}')">
-                <strong>${p.username}</strong>
-                <small>Нажмите, чтобы открыть чат</small>
+                <span>Чат с <b>${p.username}</b></span>
+                <small>Нажмите, чтобы открыть</small>
             </div>
         `).join('');
     }
 
-    window.respondFriend = async (otherId, accept) => {
-        if(accept) {
-            await supabase.from('friends').update({ status: 'accepted' }).match({ user_id: otherId, friend_id: user.id });
-        } else {
-            await supabase.from('friends').delete().match({ user_id: otherId, friend_id: user.id });
-        }
+    window.respondFriend = async (oid, acc) => {
+        if(acc) await supabase.from('friends').update({ status: 'accepted' }).match({ user_id: oid, friend_id: user.id });
+        else await supabase.from('friends').delete().match({ user_id: oid, friend_id: user.id });
         loadFriends();
     };
 
-    window.openChat = async (friendId, name) => {
-        activeChatFriendId = friendId;
+    window.openChat = (id, name) => {
+        activeChatFriendId = id;
         document.getElementById('chat-with-name').innerText = name;
         openModal('modal-chat');
         loadMessages();
@@ -175,80 +145,72 @@ window.addEventListener('load', async () => {
 
     async function loadMessages() {
         if(!activeChatFriendId) return;
-        const { data } = await supabase.from('messages')
-            .select('*')
+        const { data } = await supabase.from('messages').select('*')
             .or(`and(sender_id.eq.${user.id},receiver_id.eq.${activeChatFriendId}),and(sender_id.eq.${activeChatFriendId},receiver_id.eq.${user.id})`)
             .order('created_at', { ascending: true });
         
-        const container = document.getElementById('chat-messages');
-        container.innerHTML = data.map(m => `
-            <div class="msg ${m.sender_id === user.id ? 'sent' : 'received'}">
-                <div class="msg-bubble">${m.text}</div>
+        const cont = document.getElementById('chat-messages');
+        cont.innerHTML = (data || []).map(m => `
+            <div class="msg" style="display:flex; justify-content:${m.sender_id === user.id ? 'flex-end' : 'flex-start'}">
+                <div class="bubble" style="background:${m.sender_id === user.id ? 'var(--primary)' : 'rgba(255,255,255,0.1)'}; padding:8px 12px; border-radius:12px; max-width:80%; margin:4px 0;">
+                    ${m.text}
+                </div>
             </div>
         `).join('');
-        container.scrollTop = container.scrollHeight;
+        cont.scrollTop = cont.scrollHeight;
     }
 
     window.sendMessage = async () => {
         const input = document.getElementById('chat-input');
-        const text = input.value.trim();
-        if(!text || !activeChatFriendId) return;
-        
-        await supabase.from('messages').insert([{ sender_id: user.id, receiver_id: activeChatFriendId, text }]);
+        if(!input.value.trim()) return;
+        await supabase.from('messages').insert([{ sender_id: user.id, receiver_id: activeChatFriendId, text: input.value }]);
         input.value = '';
         loadMessages();
     };
 
-    window.inviteFriend = (friendId) => {
-        if(!currentRoomId) return alert("Сначала создайте или войдите в комнату");
-        socket.emit('sendInvite', { to: friendId, fromName: profile.username, roomId: currentRoomId });
+    window.invite = (fid) => {
+        socket.emit('sendInvite', { to: fid, fromName: profile.username, roomId: currentRoomId });
         alert("Приглашение отправлено!");
     };
 
-    socket.on('receiveInvite', ({ fromName, roomId }) => {
-        if(confirm(`${fromName} приглашает вас в игру! Принять?`)) {
+    socket.on('receiveInvite', (d) => {
+        if(confirm(`${d.fromName} приглашает вас за стол! Принять?`)) {
             socket.emit('joinRoom', { 
-                roomId, username: profile.username,
+                roomId: d.roomId, username: profile.username,
                 avatar: profile.avatar_url, banner: profile.banner_url 
             });
         }
     });
 
-    // --- ОБРАБОТКА КОНЦА ИГРЫ ---
+    // --- ОСТАЛЬНАЯ ЛОГИКА ---
     socket.on('gameEnded', async ({ winnerName, reward }) => {
         const modal = document.getElementById('modal-gameover');
-        const title = document.getElementById('go-title');
-        title.innerText = reward.won ? "ПОБЕДА!" : "ПОРАЖЕНИЕ";
-        title.style.background = reward.won ? "linear-gradient(to right, #f09819, #edde5d)" : "gray";
-        title.style.webkitBackgroundClip = "text";
+        document.getElementById('go-title').innerText = reward.won ? "ПОБЕДА!" : "ПОРАЖЕНИЕ";
         document.getElementById('go-xp').innerText = `+${reward.xp} XP`;
         document.getElementById('go-coins').innerText = `+${reward.coins} 💰`;
         modal.classList.remove('hidden');
 
-        const todayStr = new Date().toDateString();
-        localStorage.setItem('last_played_date', todayStr);
-
+        localStorage.setItem('last_played_date', new Date().toDateString());
         const newXp = profile.xp + reward.xp;
-        const newLevel = Math.floor(newXp / 100) + 1;
-        const newCoins = profile.coins + reward.coins;
-        const newWins = reward.won ? profile.wins + 1 : profile.wins;
-
-        await supabase.from('profiles').update({ xp: newXp, level: newLevel, coins: newCoins, wins: newWins }).eq('id', user.id);
-        profile.xp = newXp; profile.level = newLevel; profile.coins = newCoins; profile.wins = newWins;
-        updateProfileUI();
+        const { error } = await supabase.from('profiles').update({
+            xp: newXp, level: Math.floor(newXp / 100) + 1, coins: profile.coins + reward.coins, wins: reward.won ? profile.wins + 1 : profile.wins
+        }).eq('id', user.id);
+        if(!error) location.reload();
     });
 
-    window.backToLobby = () => location.reload();
+    window.switchTab = (tabName, btnElement) => {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+        document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+        document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+        if(btnElement) btnElement.classList.add('active');
+        if(tabName === 'friends' || tabName === 'chats') loadFriends();
+        if(tabName === 'leaderboard') window.loadLeaderboard('wins');
+    };
 
-    // --- МАГАЗИН И ИНВЕНТАРЬ ---
     async function loadShop() {
-        const grid = document.getElementById('shop-grid');
-        grid.innerHTML = SHOP_ITEMS.map(item => `
+        document.getElementById('shop-grid').innerHTML = SHOP_ITEMS.map(item => `
             <div class="shop-item" onclick="buyItem('${item.id}', ${item.price})">
-                ${item.type === 'avatar' 
-                    ? `<img src="${item.src}">` 
-                    : `<div style="width:50px;height:50px;background:${item.color};border-radius:50%;margin:0 auto 10px"></div>`
-                }
+                ${item.type === 'avatar' ? `<img src="${item.src}">` : `<div style="width:50px;height:50px;background:${item.color};border-radius:50%;margin:0 auto 10px"></div>`}
                 <div>${item.name}</div>
                 <div class="shop-price">${item.price} 💰</div>
             </div>
@@ -259,110 +221,54 @@ window.addEventListener('load', async () => {
         if(profile.coins < price) return alert("Недостаточно монет!");
         const { data: has } = await supabase.from('user_items').select('*').eq('user_id', user.id).eq('item_id', itemId);
         if(has && has.length > 0) return alert("Уже куплено!");
-
         await supabase.from('profiles').update({ coins: profile.coins - price }).eq('id', user.id);
         await supabase.from('user_items').insert([{ user_id: user.id, item_id: itemId, item_type: SHOP_ITEMS.find(i=>i.id===itemId).type }]);
-        profile.coins -= price;
-        updateProfileUI();
-        loadInventory();
-        alert("Куплено!");
+        location.reload();
     };
 
     async function loadInventory() {
         const { data: items } = await supabase.from('user_items').select('*').eq('user_id', user.id);
-        const myItems = items || [];
-        const avatarsDiv = document.getElementById('inv-avatars');
-        avatarsDiv.innerHTML = `<div class="inv-item ${profile.avatar_url==='default'?'selected':''}" onclick="equip('avatar', 'default')">Default</div>` +
-            myItems.filter(i => i.item_type === 'avatar').map(i => {
+        document.getElementById('inv-avatars').innerHTML = `<div class="inv-item" onclick="equip('avatar', 'default')">Default</div>` +
+            (items || []).filter(i => i.item_type === 'avatar').map(i => {
                 const meta = SHOP_ITEMS.find(s => s.id === i.item_id);
-                return `<div class="inv-item ${profile.avatar_url===i.item_id?'selected':''}" onclick="equip('avatar', '${i.item_id}')">
-                    <img src="${meta.src}" style="width:100%">
-                </div>`;
+                return `<div class="inv-item" onclick="equip('avatar', '${i.item_id}')"><img src="${meta.src}" style="width:100%"></div>`;
             }).join('');
     }
 
     window.equip = async (type, id) => {
         const update = type === 'avatar' ? { avatar_url: id } : { banner_url: id };
         await supabase.from('profiles').update(update).eq('id', user.id);
-        profile[type === 'avatar' ? 'avatar_url' : 'banner_url'] = id;
-        updateProfileUI();
-        loadInventory();
-    };
-
-    window.switchTab = (tabName, btnElement) => {
-        document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-        document.getElementById(`tab-${tabName}`).classList.remove('hidden');
-        document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
-        const targetBtn = btnElement || (event ? event.target : null);
-        if(targetBtn) targetBtn.classList.add('active');
-        if(tabName === 'leaderboard') window.loadLeaderboard('wins');
-        if(tabName === 'friends' || tabName === 'chats') loadFriends();
-    };
-
-    window.loadLeaderboard = async (sortBy) => {
-        const { data } = await supabase.from('profiles').select('username, wins, xp, level').order(sortBy, { ascending: false }).limit(10);
-        const list = document.getElementById('lb-list');
-        list.innerHTML = data.map((p, i) => `<div class="lb-row"><span>${i+1}</span><span>${p.username}</span><span>${p[sortBy].toFixed(0)}</span></div>`).join('');
+        location.reload();
     };
 
     function checkDailyQuest() {
         const now = new Date();
-        const lastClaim = profile.last_daily_claim ? new Date(profile.last_daily_claim) : new Date(0);
         const playedDateStr = localStorage.getItem('last_played_date');
         const btn = document.getElementById('claim-daily');
-        const statusText = document.getElementById('daily-status-text');
-
-        if(now.toDateString() === lastClaim.toDateString()) {
-            btn.classList.add('hidden');
-            if(statusText) statusText.innerText = "Выполнено ✅";
-            return;
-        }
-        if(playedDateStr === now.toDateString()) {
+        if(playedDateStr === now.toDateString() && profile.last_daily_claim !== now.toDateString()) {
             btn.classList.remove('hidden');
             btn.onclick = async () => {
-                await supabase.from('profiles').update({ coins: profile.coins + 100, last_daily_claim: now.toISOString() }).eq('id', user.id);
-                profile.coins += 100;
-                updateProfileUI();
-                btn.classList.add('hidden');
-                if(statusText) statusText.innerText = "Выполнено ✅";
+                await supabase.from('profiles').update({ coins: profile.coins + 100, last_daily_claim: now.toDateString() }).eq('id', user.id);
+                location.reload();
             };
-        } else {
-            btn.classList.add('hidden');
-            if(statusText) statusText.innerText = "Сыграйте 1 игру ⏳";
         }
     }
 
-    // --- GAME ROOMS ---
-    const createConfirmButton = document.getElementById('create-confirm');
-    if(createConfirmButton) {
-        createConfirmButton.onclick = () => {
-            const name = document.getElementById('r-name').value;
-            const password = document.getElementById('r-pass').value;
-            socket.emit('createRoom', { name, password });
-            window.closeModals();
-        };
-    }
-
-    window.tryJoin = (id, isPriv, btn) => {
-        let pass = isPriv ? prompt('Пароль') : null;
-        socket.emit('joinRoom', { roomId: id, password: pass, username: profile.username, avatar: profile.avatar_url });
+    // --- GAME ENGINE ---
+    document.getElementById('create-confirm').onclick = () => {
+        socket.emit('createRoom', { name: document.getElementById('r-name').value });
+        window.closeModals();
     };
 
     socket.on('roomsList', list => {
-        const container = document.getElementById('rooms-list');
-        container.innerHTML = list.map(r => `
+        document.getElementById('rooms-list').innerHTML = list.map(r => `
             <div class="room-item">
                 <div><strong>${r.name}</strong><br><small>${r.players}/4</small></div>
-                <button class="ios-btn small" onclick="tryJoin('${r.id}', ${r.isPrivate}, this)">Войти</button>
+                <button class="ios-btn small" onclick="socket.emit('joinRoom', {roomId:'${r.id}', username:profile.username, avatar:profile.avatar_url})">Войти</button>
             </div>`).join('');
     });
 
-    socket.on('joinSuccess', (roomId) => {
-        currentRoomId = roomId;
-        document.getElementById('lobby-screen').classList.add('hidden');
-        document.getElementById('game-screen').classList.remove('hidden');
-        loadFriends(); // Чтобы обновить кнопки приглашения
-    });
+    socket.on('joinSuccess', (id) => { currentRoomId = id; document.getElementById('lobby-screen').classList.add('hidden'); document.getElementById('game-screen').classList.remove('hidden'); });
 
     socket.on('updateState', renderGame);
 
@@ -373,42 +279,39 @@ window.addEventListener('load', async () => {
 
         document.getElementById('turn-txt').innerText = isTurn ? "ТВОЙ ХОД" : `Ходит: ${currentP.name}`;
         document.getElementById('color-dot').style.background = getColorHex(state.currentColor);
-        if(state.topCard) document.getElementById('pile').innerHTML = renderCard(state.topCard, false);
+        document.getElementById('direction-arrow').innerText = state.direction === 1 ? '↻' : '↺';
 
+        if(state.topCard) document.getElementById('pile').innerHTML = renderCard(state.topCard, false);
         document.getElementById('opponents').innerHTML = state.players.filter(p => p.id !== socket.id).map(p => `
             <div class="opp-pill ${p.id === currentP.id ? 'opp-active' : ''}">
-                <div class="avatar-container small"><img src="${getAvatarSrc(p.avatar)}"></div>
+                <div style="width:30px;height:30px;border-radius:50%;overflow:hidden"><img src="${getAvatarSrc(p.avatar)}" style="width:100%"></div>
                 <strong>${p.name}</strong>
                 <small>🃏 ${p.handSize}</small>
             </div>
         `).join('');
 
-        if(me && me.hand) document.getElementById('hand').innerHTML = me.hand.map((c, i) => renderCard(c, true, i, me.hand.length)).join('');
+        document.getElementById('hand').innerHTML = me.hand.map((c, i) => renderCard(c, true, i)).join('');
     }
 
-    function renderCard(card, isHand, index, total) {
+    function renderCard(card, isHand, index) {
         const colorClass = card.color === 'wild' ? 'wild' : card.color;
-        const style = isHand ? `style="transform: rotate(${(index - (total-1)/2)*5}deg);"` : '';
         const click = isHand ? `onclick="clickCard(${index}, '${card.color}')"` : '';
         let val = card.value;
         if(val === 'SKIP') val = '⊘'; else if(val === 'REVERSE') val = '⇄'; else if(val === 'WILD') val = '★';
-        return `<div class="card ${colorClass}" ${click} ${style}><span>${val}</span></div>`;
+        return `<div class="card ${colorClass}" ${click}><span>${val}</span></div>`;
     }
 
     function getColorHex(c) { return {red:'#ff5e62',blue:'#00c6ff',green:'#56ab2f',yellow:'#f09819',wild:'#fff'}[c] || '#fff'; }
 
     window.clickCard = (i, c) => {
-        if(c === 'wild') { pendingIndex = i; document.getElementById('modal-color').classList.remove('hidden'); }
+        if(c === 'wild') { pendingIndex = i; openModal('modal-color'); }
         else socket.emit('playCard', { roomId: currentRoomId, cardIndex: i });
     };
+
     let pendingIndex = -1;
-    window.pickColor = (c) => {
-        socket.emit('playCard', { roomId: currentRoomId, cardIndex: pendingIndex, chosenColor: c });
-        window.closeModals();
-    };
+    window.pickColor = (c) => { socket.emit('playCard', { roomId: currentRoomId, cardIndex: pendingIndex, chosenColor: c }); window.closeModals(); };
     
     document.getElementById('draw-btn').onclick = () => socket.emit('drawCard', currentRoomId);
-    document.getElementById('uno-btn').onclick = () => socket.emit('sayUno', currentRoomId);
     document.getElementById('bot-btn').onclick = () => socket.emit('addBot', currentRoomId);
-    document.getElementById('logout-btn').onclick = async () => { await supabase.auth.signOut(); location.reload(); };
+    document.getElementById('logout-btn').onclick = () => { supabase.auth.signOut(); location.reload(); };
 });
