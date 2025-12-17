@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>UNO Royale</title>
+    <title>UNO Royale Ultimate</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -14,7 +14,7 @@
         <div class="glass-card">
             <h1>UNO<span>ROYAL</span></h1>
             <input type="email" id="email" placeholder="Email">
-            <input type="password" id="password" placeholder="Password">
+            <input type="password" id="password" placeholder="Пароль">
             <button id="auth-btn" class="glow-btn">ВОЙТИ</button>
         </div>
     </div>
@@ -25,17 +25,14 @@
                 <div class="profile-box">
                     <h2 id="prof-name">...</h2>
                     <div class="xp-container">
-                        <p>Уровень: <span id="prof-lvl">1</span></p>
                         <div class="xp-bg"><div id="xp-fill"></div></div>
-                        <p id="xp-text">0 / 100 XP</p>
+                        <small id="xp-text">0/100 XP</small>
                     </div>
-                    <p>Побед: <span id="prof-wins">0</span></p>
                 </div>
-                <button id="create-btn" class="glow-btn">СОЗДАТЬ СТОЛ</button>
+                <button id="create-btn" class="glow-btn">НОВЫЙ СТОЛ</button>
                 <button id="logout-btn" class="secondary-btn">ВЫЙТИ</button>
             </aside>
             <main class="rooms-list-area">
-                <h2>СТОЛЫ</h2>
                 <div id="rooms-list"></div>
             </main>
         </div>
@@ -43,28 +40,42 @@
 
     <div id="game-screen" class="screen hidden">
         <div class="game-header">
-            <div id="turn-txt">ОЖИДАНИЕ...</div>
-            <div class="color-box">ЦВЕТ: <div id="color-dot"></div></div>
-            <button id="add-bot-btn" class="game-btn">БОТ +</button>
+            <div id="color-dot"></div>
+            <div id="turn-txt">ХОД...</div>
+            <button id="uno-btn" class="uno-btn-game">UNO!</button>
         </div>
-        <div id="opponents"></div>
+        
         <div class="center">
-            <div id="draw-pile" class="card card-back">UNO</div>
+            <div id="draw-pile" class="card-back-main">UNO</div>
             <div id="discard-pile"></div>
         </div>
-        <div class="player-area">
+
+        <div class="player-controls">
             <div id="player-hand" class="hand"></div>
-            <button id="draw-btn" class="game-btn">ВЗЯТЬ</button>
+            <div class="mobile-btns">
+                <button id="draw-btn" class="action-btn">ВЗЯТЬ КАРТУ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="color-picker" class="overlay hidden">
+        <div class="glass-card">
+            <h3>ВЫБЕРИ ЦВЕТ</h3>
+            <div class="colors-grid">
+                <div onclick="selectColor('red')" class="c-opt red"></div>
+                <div onclick="selectColor('blue')" class="c-opt blue"></div>
+                <div onclick="selectColor('green')" class="c-opt green"></div>
+                <div onclick="selectColor('yellow')" class="c-opt yellow"></div>
+            </div>
         </div>
     </div>
 
     <div id="modal-create" class="overlay hidden">
         <div class="glass-card">
-            <h3>НОВЫЙ СТОЛ</h3>
-            <input type="text" id="room-name" placeholder="Название">
-            <input type="password" id="room-pass" placeholder="Пароль (опционально)">
-            <button id="confirm-create" class="glow-btn">СОЗДАТЬ</button>
-            <button onclick="document.getElementById('modal-create').classList.add('hidden')" class="secondary-btn">ОТМЕНА</button>
+            <h3>СОЗДАТЬ</h3>
+            <input type="text" id="room-name" placeholder="Имя стола">
+            <input type="password" id="room-pass" placeholder="Пароль">
+            <button id="confirm-create" class="glow-btn">ОК</button>
         </div>
     </div>
 </body>

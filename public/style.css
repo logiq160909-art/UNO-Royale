@@ -1,31 +1,33 @@
 :root { --red: #ef4444; --blue: #3b82f6; --green: #22c55e; --yellow: #eab308; --primary: #6366f1; }
-body, html { margin: 0; padding: 0; background: #0f172a; color: white; font-family: sans-serif; height: 100%; overflow: hidden; }
+body { margin: 0; background: #0f172a; color: white; font-family: sans-serif; overflow: hidden; touch-action: manipulation; }
 .hidden { display: none !important; }
-.screen { height: 100vh; width: 100vw; display: flex; flex-direction: column; }
-.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 100; }
+.screen { height: 100dvh; display: flex; flex-direction: column; }
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 200; display: flex; justify-content: center; align-items: center; }
 
-.glass-card { background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); padding: 30px; border-radius: 20px; text-align: center; width: 280px; }
-input { width: 90%; padding: 12px; margin: 8px 0; border-radius: 8px; border: none; background: rgba(0,0,0,0.3); color: white; }
-.glow-btn { background: var(--primary); color: white; border: none; padding: 14px; border-radius: 10px; cursor: pointer; font-weight: bold; width: 100%; }
-.secondary-btn { background: transparent; border: 1px solid white; color: white; padding: 10px; border-radius: 8px; margin-top: 10px; width: 100%; cursor: pointer; }
+.glass-card { background: #1e293b; padding: 20px; border-radius: 15px; width: 80%; max-width: 300px; text-align: center; }
+.colors-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+.c-opt { height: 60px; border-radius: 10px; cursor: pointer; border: 3px solid white; }
 
-.lobby-container { display: flex; height: 100%; }
-.sidebar { width: 260px; background: rgba(255,255,255,0.05); padding: 20px; border-right: 1px solid rgba(255,255,255,0.1); }
-.rooms-list-area { flex: 1; padding: 20px; overflow-y: auto; }
-.room-item { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.game-header { height: 60px; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; background: #111827; }
+#color-dot { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; }
 
-.xp-bg { width: 100%; height: 8px; background: #334155; border-radius: 4px; overflow: hidden; margin: 10px 0; }
-#xp-fill { width: 0%; height: 100%; background: var(--primary); transition: 0.5s; }
+.center { flex: 1; display: flex; justify-content: center; align-items: center; gap: 20px; }
+.card-back-main { width: 80px; height: 120px; background: #000; border: 3px solid #fff; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--red); font-weight: bold; }
 
-.game-header { display: flex; justify-content: space-around; padding: 15px; background: rgba(0,0,0,0.4); align-items: center; }
-#color-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; display: inline-block; }
-.center { flex: 1; display: flex; justify-content: center; align-items: center; gap: 30px; }
-.card { width: 85px; height: 125px; border-radius: 10px; border: 3px solid white; display: flex; justify-content: center; align-items: center; font-size: 1.5rem; font-weight: bold; }
-.card.red { background: var(--red); } .card.blue { background: var(--blue); } .card.green { background: var(--green); } .card.yellow { background: var(--yellow); }
-.card-back { background: #000; color: var(--red); cursor: pointer; }
-.hand { display: flex; justify-content: center; height: 140px; }
-.hand .card { margin-left: -35px; transition: 0.2s; cursor: pointer; }
-.hand .card:hover { transform: translateY(-30px); z-index: 10; margin-right: 35px; }
-.game-btn { background: white; border: none; padding: 8px 15px; border-radius: 15px; font-weight: bold; cursor: pointer; }
+/* АДАПТИВНАЯ РУКА */
+.player-controls { background: rgba(0,0,0,0.5); padding-bottom: 10px; }
+.hand { display: flex; justify-content: center; height: 130px; overflow-x: auto; padding: 10px; -webkit-overflow-scrolling: touch; }
+.card { flex-shrink: 0; width: 80px; height: 120px; border-radius: 8px; border: 3px solid white; margin-left: -30px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; background: #334155; }
+.card:first-child { margin-left: 0; }
 
-@media (max-width: 768px) { .lobby-container { flex-direction: column; } .sidebar { width: 100%; border-right: none; border-bottom: 1px solid rgba(255,255,255,0.1); } }
+.mobile-btns { display: flex; justify-content: center; gap: 10px; padding: 10px; }
+.action-btn { background: var(--primary); color: #fff; border: none; padding: 12px 25px; border-radius: 25px; font-weight: bold; width: 80%; }
+.uno-btn-game { background: #f97316; border: none; color: #fff; padding: 5px 15px; border-radius: 5px; font-weight: bold; }
+
+/* Цвета карт */
+.red { background: var(--red); } .blue { background: var(--blue); } .green { background: var(--green); } .yellow { background: var(--yellow); } .wild { background: #000; }
+
+@media (min-width: 1024px) {
+    .card { width: 100px; height: 150px; }
+    .hand { height: 180px; }
+}
