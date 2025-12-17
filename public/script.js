@@ -1,5 +1,26 @@
 window.addEventListener('load', async () => {
-    // ЗАМЕНИТЕ НА СВОИ КЛЮЧИ!
+   // --- ДОБАВЬТЕ ЭТОТ БЛОК В НАЧАЛО public/script.js ---
+
+// Делаем функции доступными для HTML-обработчика onclick="..."
+window.openModal = (modalId) => {
+    // Сначала скрываем все модальные окна, чтобы избежать наложений
+    document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden'));
+    
+    // Показываем нужный модал
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.remove('hidden');
+    }
+}
+
+window.closeModals = () => {
+    document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden'));
+};
+
+// ... остальной код script.js
+// 
+
+ // ЗАМЕНИТЕ НА СВОИ КЛЮЧИ!
     const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
     
