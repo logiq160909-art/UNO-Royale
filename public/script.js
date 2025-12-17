@@ -1,24 +1,36 @@
-(() => {
+// Обертка для безопасности
+window.addEventListener('load', () => {
     const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
-    const supabase = supabasejs.createClient(supabaseUrl, supabaseKey);
+
+    // Умный поиск библиотеки Supabase
+    const lib = window.supabase || window.supabasejs;
+
+    if (!lib) {
+        alert("Ошибка: Библиотека Supabase не загрузилась. Проверьте интернет!");
+        return;
+    }
+
+    const supabase = lib.createClient(supabaseUrl, supabaseKey);
     const socket = io();
 
     const loginBtn = document.getElementById('login-btn');
     const statusMsg = document.getElementById('status-msg');
 
+    // Авторизация
     loginBtn.onclick = async () => {
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
-        if(!email || !password) return alert("Заполните поля!");
+        if (!email || !password) return alert("Введите данные!");
 
         statusMsg.innerText = "Вход...";
         let { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
         if (error) {
+            // Если входа нет, пробуем регистрацию
             let { error: sError } = await supabase.auth.signUp({ email, password });
             if (sError) statusMsg.innerText = "Ошибка: " + sError.message;
-            else statusMsg.innerText = "Письмо отправлено на почту!";
+            else statusMsg.innerText = "Проверьте почту!";
         } else {
             document.getElementById('auth-overlay').classList.add('hidden');
             document.getElementById('game-screen').classList.remove('hidden');
@@ -26,6 +38,7 @@
         }
     };
 
+    // Сетевая логика
     socket.on('initGame', (state) => updateUI(state));
     socket.on('updateState', (state) => updateUI(state));
 
@@ -39,7 +52,7 @@
 
         const discard = document.getElementById('discard-pile');
         discard.innerHTML = '';
-        if(state.topCard) {
+        if (state.topCard) {
             const topEl = document.createElement('div');
             const color = state.topCard.color === 'wild' ? state.currentColor : state.topCard.color;
             topEl.className = `card ${color}`;
@@ -69,4 +82,4 @@
 
     document.getElementById('draw-btn').onclick = () => socket.emit('drawCard');
     document.getElementById('draw-pile').onclick = () => socket.emit('drawCard');
-})();
+});
