@@ -1,17 +1,15 @@
 :root {
     --text-main: #ffffff;
-    --text-sec: #rgba(255,255,255,0.7);
     --glass-bg: rgba(255, 255, 255, 0.1);
     --glass-border: 1px solid rgba(255, 255, 255, 0.2);
     --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.2);
-    --primary: #007AFF; /* iOS Blue */
+    --primary: #007AFF; 
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
 body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     color: var(--text-main);
     background: #000;
     height: 100vh;
@@ -22,7 +20,7 @@ body {
 .screen { height: 100vh; display: flex; flex-direction: column; position: relative; z-index: 10; }
 .flex-center { justify-content: center; align-items: center; }
 
-/* --- BACKGROUND MESH ANIMATION --- */
+/* --- BACKGROUND --- */
 .background-mesh {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;
     background: linear-gradient(135deg, #0f172a, #1e1b4b);
@@ -36,13 +34,12 @@ body {
 .orb-1 { width: 400px; height: 400px; background: #7c3aed; top: -100px; left: -100px; animation-duration: 15s; }
 .orb-2 { width: 500px; height: 500px; background: #db2777; bottom: -150px; right: -100px; animation-duration: 20s; }
 .orb-3 { width: 300px; height: 300px; background: #2563eb; top: 40%; left: 40%; animation-duration: 12s; }
-
 @keyframes float {
     0%, 100% { transform: translate(0, 0); }
     50% { transform: translate(30px, -30px) scale(1.1); }
 }
 
-/* --- GLASS COMPONENTS --- */
+/* --- GLASS UI --- */
 .glass-panel {
     background: var(--glass-bg);
     backdrop-filter: blur(20px);
@@ -52,7 +49,6 @@ body {
     box-shadow: var(--shadow-soft);
     padding: 24px;
 }
-
 .glass-strip {
     background: rgba(0,0,0,0.3);
     backdrop-filter: blur(15px);
@@ -60,7 +56,6 @@ body {
     padding: 15px 20px;
     display: flex; justify-content: space-between; align-items: center;
 }
-
 .glass-strip-bottom {
     background: rgba(20, 20, 20, 0.6);
     backdrop-filter: blur(25px);
@@ -70,7 +65,7 @@ body {
     position: relative;
 }
 
-/* --- UI ELEMENTS --- */
+/* --- INPUTS & BTNS --- */
 .ios-input {
     width: 100%; padding: 14px; margin: 8px 0;
     background: rgba(255,255,255,0.1);
@@ -83,8 +78,7 @@ body {
 .ios-btn {
     width: 100%; padding: 14px; border: none;
     border-radius: 14px; font-weight: 600; font-size: 16px;
-    cursor: pointer; transition: transform 0.1s;
-    margin-top: 10px;
+    cursor: pointer; transition: transform 0.1s; margin-top: 10px;
 }
 .ios-btn:active { transform: scale(0.96); }
 .ios-btn.primary { background: white; color: black; }
@@ -95,7 +89,7 @@ body {
 .logo { font-size: 2.5rem; margin-bottom: 20px; letter-spacing: -1px; }
 .logo span { font-weight: 300; opacity: 0.8; }
 
-/* --- LOBBY --- */
+/* --- GAME LAYOUT --- */
 .layout-container { display: flex; height: 100%; padding: 20px; gap: 20px; }
 .sidebar { width: 300px; display: flex; flex-direction: column; }
 .content-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
@@ -110,9 +104,8 @@ body {
     display: flex; justify-content: space-between; align-items: center;
 }
 
-/* --- GAME --- */
+/* --- GAME ARENA --- */
 .game-arena { flex: 1; position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-
 .opponents-row {
     position: absolute; top: 10px; width: 100%;
     display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;
@@ -122,40 +115,39 @@ body {
     border-radius: 20px; font-size: 0.85rem;
     display: flex; flex-direction: column; align-items: center;
     border: 1px solid rgba(255,255,255,0.1);
+    min-width: 80px;
+}
+.opp-active {
+    border-color: #34d399;
+    box-shadow: 0 0 15px rgba(52, 211, 153, 0.4);
 }
 
 .center-table { display: flex; gap: 25px; align-items: center; }
 .status-badge { font-weight: 600; letter-spacing: 0.5px; }
+.color-indicator-wrapper { display: flex; align-items: center; }
 
-/* --- CARDS (FIXED) --- */
+/* --- CARDS --- */
 .card {
-    width: 90px; height: 136px; /* Aspect Ratio ~2:3 */
+    width: 90px; height: 136px;
     border-radius: 10px;
     display: flex; justify-content: center; align-items: center;
     font-size: 2.2rem; font-weight: 800;
     position: relative;
     box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     user-select: none;
-    border: 2px solid white; /* Plastic look */
+    border: 2px solid white;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
-/* Карты в руке */
 .hand-container {
-    display: flex;
-    justify-content: center;
-    width: 100%;
-    height: 160px;
-    padding-top: 20px;
-    overflow: visible; /* Чтобы карты не обрезались при hover */
+    display: flex; justify-content: center; width: 100%;
+    height: 160px; padding-top: 20px; overflow: visible;
 }
-
 .hand-container .card {
-    flex-shrink: 0; /* ВАЖНО: Не сплющивать карты! */
-    margin-left: -40px; /* Наложение веером */
+    flex-shrink: 0;
+    margin-left: -45px; /* Fan effect */
     cursor: pointer;
-    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     transform-origin: bottom center;
 }
-
 .hand-container .card:first-child { margin-left: 0; }
 .hand-container .card:hover {
     transform: translateY(-40px) scale(1.1) rotate(0deg) !important;
@@ -169,15 +161,36 @@ body {
 .card.green { background: linear-gradient(135deg, #56ab2f, #a8e063); }
 .card.yellow { background: linear-gradient(135deg, #f09819, #edde5d); color: black; border-color: rgba(0,0,0,0.1); }
 .card.wild { background: conic-gradient(from 180deg, #ff5e62, #00c6ff, #56ab2f, #f09819); border: 2px solid rgba(255,255,255,0.8); color: white; text-shadow: 0 2px 4px black; }
-.card-back { background: #1a1a1a; background-image: radial-gradient(#333 1px, transparent 1px); background-size: 10px 10px; border: 3px solid white; color: #ff5e62; cursor: pointer; }
+.card-back { 
+    background: #1a1a1a; 
+    background-image: radial-gradient(#333 1px, transparent 1px); 
+    background-size: 10px 10px; 
+    border: 3px solid white; 
+    color: #ff5e62; 
+    cursor: pointer; 
+}
 
-/* Controls */
+/* --- ACTIONS --- */
 .draw-action { width: 200px; border-radius: 30px; margin-top: 10px; background: white; color: black; box-shadow: 0 5px 20px rgba(255,255,255,0.3); }
-.uno-shout-btn { background: #f09819; color: black; border: none; padding: 10px 20px; border-radius: 20px; font-weight: bold; animation: pulse 1s infinite; cursor: pointer; margin-bottom: 10px; }
+.uno-shout-btn { 
+    background: #f09819; color: black; border: none; 
+    padding: 10px 20px; border-radius: 20px; font-weight: bold; 
+    animation: pulse 1s infinite; cursor: pointer; margin-bottom: 10px; 
+}
 
+/* UNO Flash Text */
+.uno-flash {
+    position: absolute; top: 40%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 4rem; font-weight: 900; color: #f09819;
+    text-shadow: 0 0 20px black;
+    animation: popIn 0.5s forwards;
+    pointer-events: none;
+}
+@keyframes popIn { 0% { transform: translate(-50%, -50%) scale(0); } 70% { transform: translate(-50%, -50%) scale(1.2); } 100% { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
 @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
-/* Modals */
+/* --- MODALS --- */
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); z-index: 100; display: flex; justify-content: center; align-items: center; }
 .modal-box { width: 300px; }
 .color-options { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }

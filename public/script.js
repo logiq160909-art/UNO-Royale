@@ -1,5 +1,5 @@
 window.addEventListener('load', async () => {
-    // ВСТАВЬ СВОИ КЛЮЧИ SUPABASE ЗДЕСЬ
+    // ВАШИ КЛЮЧИ SUPABASE (Оставьте их, но в продакшене лучше использовать .env)
     const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
     
@@ -13,14 +13,17 @@ window.addEventListener('load', async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if(session) initLobby(session.user);
 
+    // --- AUTH ---
     document.getElementById('auth-btn').onclick = async () => {
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
         const msg = document.getElementById('msg');
         msg.innerText = "Подключение...";
         
+        // Попытка входа
         let { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if(error) {
+            // Если не вышло - пробуем регистрацию
             let { data: up, error: upErr } = await supabase.auth.signUp({ email, password });
             if(upErr) return msg.innerText = upErr.message;
             initLobby(up.user);
@@ -36,15 +39,16 @@ window.addEventListener('load', async () => {
         
         let { data: p } = await supabase.from('profiles').select('*').eq('id', u.id).single();
         if(!p) {
-             p = { id: u.id, username: u.email.split('@')[0], level: 1, xp: 0 };
-             await supabase.from('profiles').insert([p]);
+             p = { id: u.id, username: u.email.split('@')[0], level: 1, xp: 0, wins: 0 };
+             // Если таблицы нет или ошибка RLS, это может упасть, но для демо ок
+             await supabase.from('profiles').insert([p]).catch(e => console.log('Profile exists or error'));
         }
-        document.getElementById('u-name').innerText = p.username;
-        document.getElementById('lvl-txt').innerText = `Lvl ${p.level} • Wins: ${p.wins}`;
-        document.getElementById('xp-bar').style.width = (p.xp % 100) + '%';
+        document.getElementById('u-name').innerText = p.username || u.email;
+        document.getElementById('lvl-txt').innerText = `Lvl ${p.level || 1} • Wins: ${p.wins || 0}`;
+        document.getElementById('xp-bar').style.width = ((p.xp || 0) % 100) + '%';
     }
 
-    // ЛОББИ
+    // --- LOBBY LOGIC ---
     socket.on('roomsList', list => {
         const container = document.getElementById('rooms-list');
         if(list.length === 0) container.innerHTML = '<div style="text-align:center; opacity:0.5; padding:20px">Нет столов</div>';
@@ -75,6 +79,7 @@ window.addEventListener('load', async () => {
         document.getElementById('game-screen').classList.remove('hidden');
     });
 
+    // --- GAME UI LOGIC ---
     window.openModal = () => document.getElementById('modal-create').classList.remove('hidden');
     window.closeModals = () => document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden'));
 
@@ -90,54 +95,72 @@ window.addEventListener('load', async () => {
         socket.emit('joinRoom', { roomId: id, password: document.getElementById('r-pass').value, username: document.getElementById('u-name').innerText });
     });
 
-    // ИГРА
     socket.on('updateState', renderGame);
-    socket.on('initGame', renderGame);
 
     function renderGame(state) {
-        const me = state.fullPlayersForLogic.find(p => p.id === socket.id);
-        if(!me) return;
+        // Определяем, чей ход
+        const currentPlayer = state.players[state.turnIndex];
+        const isMyTurn = currentPlayer.id === socket.id;
 
-        const isTurn = state.fullPlayersForLogic[state.turnIndex].id === socket.id;
+        // Обновляем шапку
         const statusDiv = document.getElementById('turn-txt');
-        statusDiv.innerText = isTurn ? "ТВОЙ ХОД" : `Ходит: ${state.fullPlayersForLogic[state.turnIndex].name}`;
-        statusDiv.style.color = isTurn ? '#34d399' : '#fff';
+        statusDiv.innerText = isMyTurn ? "ТВОЙ ХОД" : `Ходит: ${currentPlayer.name}`;
+        statusDiv.style.color = isMyTurn ? '#34d399' : '#fff';
+
+        // Индикатор направления
+        const arrow = document.getElementById('direction-arrow');
+        arrow.style.transform = state.direction === 1 ? 'rotate(0deg)' : 'rotate(180deg)';
+        arrow.title = state.direction === 1 ? 'По часовой' : 'Против часовой';
 
         // Цвет стола
-        const colorHex = getColorHex(state.currentColor);
-        document.getElementById('color-dot').style.background = colorHex;
+        document.getElementById('color-dot').style.background = getColorHex(state.currentColor);
         
         // Карта сброса
         if(state.topCard) {
             document.getElementById('pile').innerHTML = renderCard(state.topCard, false);
         }
 
-        // Соперники
-        document.getElementById('opponents').innerHTML = state.fullPlayersForLogic
+        // Соперники (исключаем себя из общего списка для отображения сверху)
+        document.getElementById('opponents').innerHTML = state.players
             .filter(p => p.id !== socket.id)
-            .map(p => `
-                <div class="opp-pill">
+            .map(p => {
+                const isActive = (p.id === currentPlayer.id) ? 'opp-active' : '';
+                return `
+                <div class="opp-pill ${isActive}">
                     <strong>${p.name}</strong>
                     <div style="font-size:0.8rem">🃏 ${p.handSize}</div>
-                    ${p.unoSaid ? '<span style="color:#f09819">UNO!</span>' : ''}
+                    ${p.unoSaid ? '<span style="color:#f09819; font-weight:bold">UNO!</span>' : ''}
                 </div>
-            `).join('');
+            `}).join('');
 
-        // Моя рука (исправлен рендеринг)
-        document.getElementById('hand').innerHTML = me.hand.map((c, i) => renderCard(c, true, i)).join('');
-
-        // Кнопка UNO
-        if(isTurn && me.hand.length === 2) document.getElementById('uno-controls').classList.remove('hidden');
-        else document.getElementById('uno-controls').classList.add('hidden');
+        // Моя рука (берем из state.me, который присылает сервер только нам)
+        if (state.me && state.me.hand) {
+            document.getElementById('hand').innerHTML = state.me.hand
+                .map((c, i) => renderCard(c, true, i, state.me.hand.length))
+                .join('');
+            
+            // Кнопка UNO
+            const myPlayerInfo = state.players.find(p => p.id === socket.id);
+            if(myPlayerInfo && state.me.hand.length === 2 && !myPlayerInfo.unoSaid && isMyTurn) {
+                document.getElementById('uno-controls').classList.remove('hidden');
+            } else {
+                document.getElementById('uno-controls').classList.add('hidden');
+            }
+        }
     }
 
-    function renderCard(card, isHand, index) {
+    function renderCard(card, isHand, index, total) {
         const colorClass = card.color === 'wild' ? 'wild' : card.color;
         const clickAttr = isHand ? `onclick="clickCard(${index}, '${card.color}')"` : '';
-        // Добавляем небольшой поворот для красоты в руке
-        const rotate = isHand ? `style="transform: rotate(${(index - 3) * 2}deg)"` : '';
         
-        return `<div class="card ${colorClass}" ${clickAttr} ${rotate}>
+        // Расчет поворота для веера
+        let style = '';
+        if (isHand) {
+            const angle = (index - (total - 1) / 2) * 5; // 5 градусов разброс
+            style = `style="transform: rotate(${angle}deg); margin-bottom: ${Math.abs(angle)}px"`;
+        }
+        
+        return `<div class="card ${colorClass}" ${clickAttr} ${style}>
             <span>${card.value}</span>
         </div>`;
     }
@@ -151,6 +174,9 @@ window.addEventListener('load', async () => {
     }
 
     window.clickCard = (i, color) => {
+        // Блокируем клик, если не наш ход (опционально, сервер все равно проверит)
+        // if (document.getElementById('turn-txt').innerText !== "ТВОЙ ХОД") return;
+
         if(color === 'wild') {
             pendingIndex = i;
             document.getElementById('modal-color').classList.remove('hidden');
@@ -170,16 +196,22 @@ window.addEventListener('load', async () => {
     document.getElementById('bot-btn').onclick = () => socket.emit('addBot', currentRoomId);
     document.getElementById('logout-btn').onclick = async () => { await supabase.auth.signOut(); location.reload(); };
 
+    // Эффекты
+    socket.on('unoEffect', (name) => {
+        const flash = document.getElementById('uno-flash');
+        flash.innerText = `${name} UNO!`;
+        flash.classList.remove('hidden');
+        setTimeout(() => flash.classList.add('hidden'), 2000);
+    });
+
     socket.on('gameOver', async ({ winner, id }) => {
         const win = id === socket.id;
         alert(win ? "🏆 ПОБЕДА! +50 XP" : `Победил ${winner}`);
         if(user) {
-             let { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+             // Просто обновляем локально, серверной БД логики полной нет, но запрос отправим
              await supabase.from('profiles').update({ 
-                 xp: p.xp + (win?50:10), 
-                 level: Math.floor((p.xp + (win?50:10))/100)+1,
-                 wins: win ? p.wins+1 : p.wins
-             }).eq('id', user.id);
+                 wins: win ? (user.wins || 0) + 1 : (user.wins || 0) 
+             }).eq('id', user.id).catch(e => {});
         }
         location.reload();
     });

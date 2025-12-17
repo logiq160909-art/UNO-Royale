@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>UNO Liquid</title>
+    <title>UNO Royale</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -19,7 +19,7 @@
 
     <section id="auth-screen" class="screen flex-center">
         <div class="glass-panel auth-box">
-            <h1 class="logo">UNO <span class="thin">LIQUID</span></h1>
+            <h1 class="logo">UNO <span class="thin">ROYALE</span></h1>
             <input type="email" id="email" placeholder="Email" class="ios-input">
             <input type="password" id="password" placeholder="Пароль" class="ios-input">
             <button id="auth-btn" class="ios-btn primary">Войти</button>
@@ -53,6 +53,7 @@
         <header class="game-header glass-strip">
             <div id="turn-txt" class="status-badge">Ожидание...</div>
             <div class="color-indicator-wrapper">
+                <span id="direction-arrow" style="margin-right:10px; font-size:1.5rem">↻</span>
                 <div id="color-dot" class="color-blob"></div>
             </div>
             <button id="bot-btn" class="ios-btn small">Add Bot</button>
@@ -65,6 +66,7 @@
                 <div id="deck" class="card card-back">UNO</div>
                 <div id="pile"></div>
             </div>
+            <div id="uno-flash" class="uno-flash hidden">UNO!</div>
         </div>
 
         <div class="player-hud glass-strip-bottom">
@@ -83,7 +85,7 @@
         <div class="glass-panel modal-box">
             <h3>Новая игра</h3>
             <input type="text" id="r-name" placeholder="Название" class="ios-input">
-            <input type="password" id="r-pass" placeholder="Пароль" class="ios-input">
+            <input type="password" id="r-pass" placeholder="Пароль (необяз.)" class="ios-input">
             <div class="modal-actions">
                 <button id="create-confirm" class="ios-btn primary">Создать</button>
                 <button onclick="closeModals()" class="ios-btn secondary">Отмена</button>
@@ -102,6 +104,5 @@
             </div>
         </div>
     </div>
-
 </body>
 </html>
