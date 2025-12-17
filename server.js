@@ -1,68 +1,147 @@
-window.addEventListener('load', () => {
-    const socket = io();
-    let currentRoomId = null, pendingIdx = null;
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 
-    // Вход (упрощенная авторизация для примера)
-    document.getElementById('auth-btn').onclick = () => {
-        const name = document.getElementById('email').value.split('@')[0] || 'Игрок';
-        document.getElementById('u-name').innerText = name;
-        document.getElementById('auth-screen').classList.add('hidden');
-        document.getElementById('lobby-screen').classList.remove('hidden');
-    };
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
 
-    socket.on('roomsList', list => {
-        document.getElementById('rooms-list').innerHTML = list.map(r => `
-            <div style="display:flex; justify-content:space-between; padding:10px; background:rgba(255,255,255,0.05); margin-bottom:5px; border-radius:10px;">
-                <span>${r.name} (${r.players}/4)</span>
-                <button class="ios-btn small primary" onclick="join('${r.id}')">Войти</button>
-            </div>`).join('');
+app.use(express.static('public'));
+
+let rooms = {};
+
+function createDeck() {
+    const colors = ['red', 'blue', 'green', 'yellow'];
+    const values = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'SKIP', 'REVERSE', '+2'];
+    let deck = [];
+    colors.forEach(c => values.forEach(v => {
+        deck.push({ color: c, value: v });
+        if (v !== '0') deck.push({ color: c, value: v });
+    }));
+    for (let i = 0; i < 4; i++) {
+        deck.push({ color: 'wild', value: 'WILD' });
+        deck.push({ color: 'wild', value: '+4' });
+    }
+    return deck.sort(() => Math.random() - 0.5);
+}
+
+function sendState(room) {
+    room.players.forEach(p => {
+        if (p.isBot) return;
+        io.to(p.id).emit('updateState', {
+            topCard: room.topCard,
+            currentColor: room.currentColor,
+            turnIndex: room.turnIndex,
+            gameStarted: room.gameStarted,
+            opponents: room.players.map(pl => ({ 
+                id: pl.id, 
+                name: pl.name, 
+                handSize: pl.hand.length 
+            })),
+            myHand: p.hand
+        });
     });
+}
 
-    window.join = (id) => socket.emit('joinRoom', { roomId: id, username: document.getElementById('u-name').innerText });
-    window.openModal = () => socket.emit('createRoom', { name: 'Мой стол' });
-
-    socket.on('joinSuccess', id => {
-        currentRoomId = id;
-        document.getElementById('lobby-screen').classList.add('hidden');
-        document.getElementById('game-screen').classList.remove('hidden');
-    });
-
-    socket.on('updateState', state => {
-        const isMyTurn = state.opponents[state.turnIndex].id === socket.id;
-        document.getElementById('turn-txt').innerText = isMyTurn ? "ТВОЙ ХОД" : `Ходит: ${state.opponents[state.turnIndex].name}`;
-        document.getElementById('color-dot').style.background = getColor(state.currentColor);
-        
-        if (state.topCard) {
-            document.getElementById('pile').innerHTML = `<div class="card ${state.topCard.color}"><span>${state.topCard.value}</span></div>`;
-        }
-
-        // Противники (Видим кол-во карт)
-        document.getElementById('opponents').innerHTML = state.opponents
-            .filter(p => p.id !== socket.id)
-            .map(p => `<div class="opp-pill"><b>${p.name}</b><br>Карты: ${p.handSize}</div>`).join('');
-
-        // Своя рука
-        document.getElementById('hand').innerHTML = state.myHand.map((c, i) => 
-            `<div class="card ${c.color}" onclick="useCard(${i}, '${c.color}')"><span>${c.value}</span></div>`).join('');
-    });
-
-    window.useCard = (i, color) => {
-        if (color === 'wild') {
-            pendingIdx = i;
-            document.getElementById('modal-color').classList.remove('hidden');
-        } else {
-            socket.emit('playCard', { roomId: currentRoomId, cardIndex: i });
-        }
-    };
-
-    window.pickColor = (c) => {
-        socket.emit('playCard', { roomId: currentRoomId, cardIndex: pendingIdx, chosenColor: c });
-        document.getElementById('modal-color').classList.add('hidden');
-    };
-
-    document.getElementById('draw-btn').onclick = () => socket.emit('drawCard', currentRoomId);
-    document.getElementById('bot-btn').onclick = () => socket.emit('addBot', currentRoomId);
+function startGame(room) {
+    room.gameStarted = true;
+    room.deck = createDeck();
+    room.players.forEach(p => p.hand = room.deck.splice(0, 7));
     
-    socket.on('gameOver', d => { alert("Победил: " + d.winner); location.reload(); });
-    function getColor(n) { return {red:'#ff5e62', blue:'#00c6ff', green:'#56ab2f', yellow:'#f09819'}[n] || '#fff'; }
+    // Поиск первой карты (не спец-карта)
+    let safeIdx = room.deck.findIndex(c => 
+        !['SKIP', 'REVERSE', '+2', '+4', 'WILD'].includes(c.value) && c.color !== 'wild'
+    );
+    room.topCard = room.deck.splice(safeIdx >= 0 ? safeIdx : 0, 1)[0];
+    room.currentColor = room.topCard.color;
+    
+    // Рандомный старт
+    room.turnIndex = Math.floor(Math.random() * room.players.length);
+    sendState(room);
+}
+
+io.on('connection', (socket) => {
+    socket.on('createRoom', ({ name }) => {
+        const roomId = Math.random().toString(36).substr(2, 6);
+        rooms[roomId] = {
+            id: roomId, name: name || "Стол UNO", players: [],
+            deck: [], topCard: null, turnIndex: 0, gameStarted: false
+        };
+        socket.emit('roomCreated', roomId);
+    });
+
+    socket.on('joinRoom', ({ roomId, username }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        socket.join(roomId);
+        room.players.push({ id: socket.id, name: username || 'Игрок', hand: [], isBot: false });
+        if (room.players.length >= 2 && !room.gameStarted) startGame(room);
+        else sendState(room);
+    });
+
+    socket.on('playCard', ({ roomId, cardIndex, chosenColor }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        const player = room.players[room.turnIndex];
+        if (player.id !== socket.id) return;
+
+        const card = player.hand[cardIndex];
+        const isWild = card.color === 'wild';
+        if (card.color === room.currentColor || card.value === room.topCard.value || isWild) {
+            player.hand.splice(cardIndex, 1);
+            room.topCard = card;
+            room.currentColor = isWild ? chosenColor : card.color;
+
+            if (player.hand.length === 0) {
+                io.to(roomId).emit('gameOver', { winner: player.name });
+                delete rooms[roomId];
+                return;
+            }
+            room.turnIndex = (room.turnIndex + 1) % room.players.length;
+            sendState(room);
+            if (room.players[room.turnIndex].isBot) runBot(room);
+        }
+    });
+
+    socket.on('drawCard', (roomId) => {
+        const room = rooms[roomId];
+        if (room && room.players[room.turnIndex].id === socket.id) {
+            room.players[room.turnIndex].hand.push(room.deck.pop());
+            room.turnIndex = (room.turnIndex + 1) % room.players.length;
+            sendState(room);
+            if (room.players[room.turnIndex].isBot) runBot(room);
+        }
+    });
+
+    socket.on('addBot', (roomId) => {
+        const room = rooms[roomId];
+        if (room && room.players.length < 4) {
+            room.players.push({ id: 'bot_'+Math.random(), name: 'Бот Аркадий', hand: [], isBot: true });
+            if (room.players.length >= 2 && !room.gameStarted) startGame(room);
+            else sendState(room);
+        }
+    });
 });
+
+function runBot(room) {
+    setTimeout(() => {
+        const bot = room.players[room.turnIndex];
+        if (!bot || !bot.isBot) return;
+        const idx = bot.hand.findIndex(c => c.color === room.currentColor || c.value === room.topCard.value || c.color === 'wild');
+        if (idx !== -1) {
+            const card = bot.hand[idx];
+            bot.hand.splice(idx, 1);
+            room.topCard = card;
+            room.currentColor = card.color === 'wild' ? 'red' : card.color;
+            if (bot.hand.length === 0) return io.to(room.id).emit('gameOver', { winner: bot.name });
+        } else {
+            bot.hand.push(room.deck.pop());
+        }
+        room.turnIndex = (room.turnIndex + 1) % room.players.length;
+        sendState(room);
+        if (room.players[room.turnIndex].isBot) runBot(room);
+    }, 1500);
+}
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`Server on port ${PORT}`));

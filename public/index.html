@@ -2,11 +2,10 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UNO Liquid</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="script.js" defer></script>
 </head>
 <body>
@@ -15,45 +14,35 @@
     <section id="auth-screen" class="screen">
         <div class="glass-panel">
             <h1>UNO <span style="font-weight:100">LIQUID</span></h1>
-            <input type="email" id="email" placeholder="Email" class="ios-input">
-            <input type="password" id="password" placeholder="Пароль" class="ios-input">
-            <button id="auth-btn" class="ios-btn primary">Войти</button>
-        </div>
-    </section>
-
-    <section id="lobby-screen" class="screen hidden">
-        <div class="glass-panel" style="width:90%; height:80%; max-width:600px; display:flex; flex-direction:column;">
-            <h2 id="u-name">...</h2>
-            <div id="rooms-list" style="flex:1; overflow-y:auto; margin:20px 0;"></div>
-            <button onclick="openModal()" class="ios-btn primary">Создать стол</button>
+            <input type="text" id="username" placeholder="Ваше имя" class="ios-input">
+            <button id="start-btn" class="ios-btn">Играть</button>
         </div>
     </section>
 
     <section id="game-screen" class="screen hidden">
         <header class="game-header">
-            <div id="turn-txt">Ожидание...</div>
+            <div id="turn-txt">Ожидание игроков...</div>
             <div id="color-dot" style="width:20px; height:20px; border-radius:50%; border:2px solid white;"></div>
-            <button id="bot-btn" class="ios-btn small primary">Add Bot</button>
+            <button onclick="socket.emit('addBot', currentRoomId)" class="ios-btn" style="padding:5px 10px; font-size:12px">Добавить бота</button>
         </header>
         <div class="game-arena">
             <div id="opponents" class="opponents-row"></div>
             <div style="display:flex; gap:20px;">
-                <div id="deck" class="card card-back">UNO</div>
+                <div id="deck" onclick="socket.emit('drawCard', currentRoomId)" class="card" style="background:#1a1a1a; cursor:pointer">UNO</div>
                 <div id="pile"></div>
             </div>
         </div>
         <div class="hand-container" id="hand"></div>
-        <button id="draw-btn" class="ios-btn primary" style="width:200px; border-radius:30px; margin:10px;">Взять карту</button>
     </section>
 
     <div id="modal-color" class="overlay hidden">
         <div class="glass-panel">
-            <h3>Цвет:</h3>
-            <div class="color-options">
-                <div class="color-btn red" onclick="pickColor('red')"></div>
-                <div class="color-btn blue" onclick="pickColor('blue')"></div>
-                <div class="color-btn green" onclick="pickColor('green')"></div>
-                <div class="color-btn yellow" onclick="pickColor('yellow')"></div>
+            <h3>Выберите цвет:</h3>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <div onclick="pickColor('red')" class="card red" style="width:60px; height:60px"></div>
+                <div onclick="pickColor('blue')" class="card blue" style="width:60px; height:60px"></div>
+                <div onclick="pickColor('green')" class="card green" style="width:60px; height:60px"></div>
+                <div onclick="pickColor('yellow')" class="card yellow" style="width:60px; height:60px"></div>
             </div>
         </div>
     </div>
