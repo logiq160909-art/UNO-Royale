@@ -21,8 +21,10 @@ function createDeck() {
     const colors = ['red', 'blue', 'green', 'yellow'];
     const values = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'SKIP', 'REVERSE', '+2'];
     let deck = [];
-    colors.forEach(c => values.forEach(v => deck.push({color: c, value: v})));
-    // Добавим черные карты
+    colors.forEach(c => values.forEach(v => {
+        deck.push({color: c, value: v});
+        if(v !== '0') deck.push({color: c, value: v});
+    }));
     for(let i=0; i<4; i++) {
         deck.push({color: 'wild', value: 'WILD'});
         deck.push({color: 'wild', value: '+4'});
@@ -34,11 +36,7 @@ io.on('connection', (socket) => {
     socket.on('joinRoyale', (data) => {
         if (gameState.players.length < 4 && !gameState.gameStarted) {
             gameState.players.push({ id: socket.id, name: data.username, hand: [] });
-            io.emit('playerListUpdate', gameState.players.map(p => p.name));
-            
-            if (gameState.players.length >= 2) {
-                startGame();
-            }
+            if (gameState.players.length >= 2) startGame();
         }
     });
 
@@ -47,21 +45,22 @@ io.on('connection', (socket) => {
         gameState.deck = createDeck();
         gameState.players.forEach(p => p.hand = gameState.deck.splice(0, 7));
         gameState.topCard = gameState.deck.pop();
+        while(gameState.topCard.color === 'wild') {
+            gameState.deck.unshift(gameState.topCard);
+            gameState.topCard = gameState.deck.pop();
+        }
         gameState.currentColor = gameState.topCard.color;
         io.emit('initGame', gameState);
     }
 
     socket.on('playCard', (cardIndex) => {
         const player = gameState.players[gameState.turnIndex];
-        if (player.id !== socket.id) return;
+        if (!player || player.id !== socket.id) return;
 
         const card = player.hand[cardIndex];
-        // Проверка правил
         if (card.color === 'wild' || card.color === gameState.currentColor || card.value === gameState.topCard.value) {
             gameState.topCard = player.hand.splice(cardIndex, 1)[0];
-            gameState.currentColor = gameState.topCard.color;
-            
-            // Логика перехода хода
+            gameState.currentColor = (card.color === 'wild') ? gameState.currentColor : card.color;
             gameState.turnIndex = (gameState.turnIndex + 1) % gameState.players.length;
             io.emit('updateState', gameState);
         }
@@ -69,8 +68,7 @@ io.on('connection', (socket) => {
 
     socket.on('drawCard', () => {
         const player = gameState.players[gameState.turnIndex];
-        if (player.id !== socket.id) return;
-        
+        if (!player || player.id !== socket.id) return;
         if (gameState.deck.length === 0) gameState.deck = createDeck();
         player.hand.push(gameState.deck.pop());
         gameState.turnIndex = (gameState.turnIndex + 1) % gameState.players.length;
@@ -79,8 +77,11 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         gameState.players = gameState.players.filter(p => p.id !== socket.id);
-        if (gameState.players.length < 2) gameState.gameStarted = false;
+        if (gameState.players.length < 2) {
+            gameState.gameStarted = false;
+            gameState.players = [];
+        }
     });
 });
 
-server.listen(process.env.PORT || 3000, () => console.log('Server running!'));
+server.listen(process.env.PORT || 3000, () => console.log('Server Live!'));

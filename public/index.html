@@ -11,23 +11,24 @@
 <body>
     <div id="auth-overlay" class="overlay">
         <div class="glass-card">
-            <h1 class="logo">UNO<span>ROYAL</span></h1>
+            <h1>UNO<span>ROYAL</span></h1>
             <input type="email" id="email" placeholder="Email">
             <input type="password" id="password" placeholder="Password">
             <button id="login-btn" class="glow-btn">ВОЙТИ / РЕГИСТРАЦИЯ</button>
+            <p id="status-msg" style="color: #ef4444; margin-top: 10px;"></p>
         </div>
     </div>
 
     <div id="game-screen" class="hidden">
         <div class="game-header">
-            <div id="turn-indicator">Ожидание игроков...</div>
+            <div id="turn-indicator">ОЖИДАНИЕ ИГРОКОВ...</div>
             <div class="status-box">ЦВЕТ: <div id="color-dot"></div></div>
         </div>
+        <div id="opponents"></div>
         <div class="center-zone">
             <div id="draw-pile" class="card-back">UNO</div>
             <div id="discard-pile"></div>
         </div>
-        <div id="opponents"></div>
         <div class="player-area">
             <div id="player-hand" class="hand"></div>
             <button id="draw-btn" class="game-btn">ВЗЯТЬ КАРТУ</button>
