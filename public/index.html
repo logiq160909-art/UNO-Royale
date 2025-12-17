@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>UNO Royale Platform</title>
+    <title>UNO Royale</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -14,24 +14,28 @@
         <div class="glass-card">
             <h1>UNO<span>ROYAL</span></h1>
             <input type="email" id="email" placeholder="Email">
-            <input type="password" id="password" placeholder="Пароль">
+            <input type="password" id="password" placeholder="Password">
             <button id="auth-btn" class="glow-btn">ВОЙТИ</button>
         </div>
     </div>
 
     <div id="lobby-screen" class="screen hidden">
         <div class="lobby-container">
-            <aside class="profile-sidebar">
-                <div class="user-info">
-                    <h2 id="prof-name">Загрузка...</h2>
-                    <p>Уровень: <span id="prof-lvl">1</span></p>
+            <aside class="sidebar">
+                <div class="profile-box">
+                    <h2 id="prof-name">...</h2>
+                    <div class="xp-container">
+                        <p>Уровень: <span id="prof-lvl">1</span></p>
+                        <div class="xp-bg"><div id="xp-fill"></div></div>
+                        <p id="xp-text">0 / 100 XP</p>
+                    </div>
                     <p>Побед: <span id="prof-wins">0</span></p>
                 </div>
-                <button id="create-room-trigger" class="glow-btn">СОЗДАТЬ СТОЛ</button>
+                <button id="create-btn" class="glow-btn">СОЗДАТЬ СТОЛ</button>
                 <button id="logout-btn" class="secondary-btn">ВЫЙТИ</button>
             </aside>
-            <main class="rooms-area">
-                <h2>ДОСТУПНЫЕ СТОЛЫ</h2>
+            <main class="rooms-list-area">
+                <h2>СТОЛЫ</h2>
                 <div id="rooms-list"></div>
             </main>
         </div>
@@ -39,12 +43,13 @@
 
     <div id="game-screen" class="screen hidden">
         <div class="game-header">
-            <div id="turn-indicator">ОЖИДАНИЕ...</div>
-            <div class="status-box">ЦВЕТ: <div id="color-dot"></div></div>
+            <div id="turn-txt">ОЖИДАНИЕ...</div>
+            <div class="color-box">ЦВЕТ: <div id="color-dot"></div></div>
+            <button id="add-bot-btn" class="game-btn">БОТ +</button>
         </div>
         <div id="opponents"></div>
-        <div class="center-zone">
-            <div id="draw-pile" class="card-back">UNO</div>
+        <div class="center">
+            <div id="draw-pile" class="card card-back">UNO</div>
             <div id="discard-pile"></div>
         </div>
         <div class="player-area">
@@ -56,10 +61,10 @@
     <div id="modal-create" class="overlay hidden">
         <div class="glass-card">
             <h3>НОВЫЙ СТОЛ</h3>
-            <input type="text" id="new-room-name" placeholder="Название">
-            <input type="password" id="new-room-pass" placeholder="Пароль (опционально)">
+            <input type="text" id="room-name" placeholder="Название">
+            <input type="password" id="room-pass" placeholder="Пароль (опционально)">
             <button id="confirm-create" class="glow-btn">СОЗДАТЬ</button>
-            <button onclick="closeModal()" class="secondary-btn">ОТМЕНА</button>
+            <button onclick="document.getElementById('modal-create').classList.add('hidden')" class="secondary-btn">ОТМЕНА</button>
         </div>
     </div>
 </body>

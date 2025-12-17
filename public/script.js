@@ -4,78 +4,64 @@ window.addEventListener('load', async () => {
     const lib = window.supabase || window.supabasejs;
     const supabase = lib.createClient(supabaseUrl, supabaseKey);
     const socket = io();
-    let currentUser = null;
-    let activeRoomId = null;
+    let currentUser = null, activeRoomId = null;
 
-    // ПРОВЕРКА СЕССИИ (Пункт 2)
     const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-        showLobby(session.user);
-    }
+    if (session) showLobby(session.user);
 
     async function showLobby(user) {
         currentUser = user;
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('lobby-screen').classList.remove('hidden');
-        
-        // Получаем статистику (Пункт 3)
-        let { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if(!profile) {
-            const newProf = { id: user.id, username: user.email.split('@')[0] };
-            await supabase.from('profiles').insert([newProf]);
-            profile = newProf;
+        let { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        if(!p) {
+            p = { id: user.id, username: user.email.split('@')[0], level: 1, xp: 0, wins: 0 };
+            await supabase.from('profiles').insert([p]);
         }
-        document.getElementById('prof-name').innerText = profile.username;
-        document.getElementById('prof-lvl').innerText = profile.level || 1;
-        document.getElementById('prof-wins').innerText = profile.wins || 0;
+        renderStats(p.xp, p.level, p.wins, p.username);
     }
 
-    // ВХОД
+    function renderStats(xp, lvl, wins, name) {
+        document.getElementById('prof-name').innerText = name;
+        document.getElementById('prof-lvl').innerText = lvl;
+        document.getElementById('prof-wins').innerText = wins;
+        document.getElementById('xp-fill').style.width = (xp % 100) + "%";
+        document.getElementById('xp-text').innerText = `${xp % 100} / 100 XP`;
+    }
+
     document.getElementById('auth-btn').onclick = async () => {
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
+        const email = document.getElementById('email').value, password = document.getElementById('password').value;
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) {
-            await supabase.auth.signUp({ email, password });
-            alert("Аккаунт создан! Нажмите войти.");
-        } else {
-            showLobby(data.user);
-        }
+        if (error) { await supabase.auth.signUp({ email, password }); alert("Аккаунт создан! Нажмите войти."); }
+        else showLobby(data.user);
     };
 
-    // ВЫХОД
-    document.getElementById('logout-btn').onclick = async () => {
-        await supabase.auth.signOut();
-        location.reload();
-    };
-
-    // КОМНАТЫ
-    document.getElementById('create-room-trigger').onclick = () => document.getElementById('modal-create').classList.remove('hidden');
-    
+    document.getElementById('logout-btn').onclick = async () => { await supabase.auth.signOut(); location.reload(); };
+    document.getElementById('create-btn').onclick = () => document.getElementById('modal-create').classList.remove('hidden');
     document.getElementById('confirm-create').onclick = () => {
-        const name = document.getElementById('new-room-name').value;
-        const password = document.getElementById('new-room-pass').value;
-        if(name) socket.emit('createRoom', { name, password });
+        socket.emit('createRoom', { name: document.getElementById('room-name').value, password: document.getElementById('room-pass').value });
         document.getElementById('modal-create').classList.add('hidden');
     };
 
+    socket.on('roomCreated', (id) => joinRoom(id, false));
     socket.on('roomsList', (rooms) => {
-        const list = document.getElementById('rooms-list');
-        list.innerHTML = rooms.map(r => `
+        document.getElementById('rooms-list').innerHTML = rooms.map(r => `
             <div class="room-item">
                 <span>${r.name} (${r.players}/4) ${r.isPrivate ? '🔒' : ''}</span>
-                <button class="glow-btn" style="width:auto" onclick="joinRoom('${r.id}', ${r.isPrivate})">ВОЙТИ</button>
+                <button class="game-btn" onclick="joinRoom('${r.id}', ${r.isPrivate})">ВОЙТИ</button>
             </div>
         `).join('');
     });
 
     window.joinRoom = (id, isPrivate) => {
-        let pass = isPrivate ? prompt('Введите пароль:') : null;
+        let pass = isPrivate ? prompt('Пароль:') : null;
         activeRoomId = id;
         socket.emit('joinRoom', { roomId: id, password: pass, username: currentUser.email.split('@')[0] });
         document.getElementById('lobby-screen').classList.add('hidden');
         document.getElementById('game-screen').classList.remove('hidden');
     };
+
+    document.getElementById('add-bot-btn').onclick = () => socket.emit('addBot', activeRoomId);
 
     socket.on('initGame', (state) => updateUI(state));
     socket.on('updateState', (state) => updateUI(state));
@@ -83,22 +69,23 @@ window.addEventListener('load', async () => {
     function updateUI(state) {
         const me = state.players.find(p => p.id === socket.id);
         if (!me) return;
-
-        document.getElementById('turn-indicator').innerText = 
-            state.players[state.turnIndex].id === socket.id ? "ВАШ ХОД!" : "ЖДИТЕ...";
+        const isMyTurn = state.players[state.turnIndex].id === socket.id;
+        document.getElementById('turn-txt').innerText = isMyTurn ? "ВАШ ХОД!" : "ЖДИТЕ...";
         document.getElementById('color-dot').style.backgroundColor = `var(--${state.currentColor})`;
-
-        const discard = document.getElementById('discard-pile');
-        discard.innerHTML = `<div class="card ${state.topCard.color}"><span>${state.topCard.value}</span></div>`;
-
-        const hand = document.getElementById('player-hand');
-        hand.innerHTML = me.hand.map((c, i) => `
-            <div class="card ${c.color}" onclick="playCard(${i})"><span>${c.value}</span></div>
-        `).join('');
+        document.getElementById('discard-pile').innerHTML = `<div class="card ${state.topCard.color}"><span>${state.topCard.value}</span></div>`;
+        document.getElementById('player-hand').innerHTML = me.hand.map((c, i) => 
+            `<div class="card ${c.color}" onclick="playCard(${i})"><span>${c.value}</span></div>`).join('');
     }
 
     window.playCard = (i) => socket.emit('playCard', { roomId: activeRoomId, cardIndex: i });
     document.getElementById('draw-btn').onclick = () => socket.emit('drawCard', activeRoomId);
-});
 
-function closeModal() { document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden')); }
+    socket.on('gameOver', async ({ id }) => {
+        const isWin = socket.id === id;
+        alert(isWin ? "ПОБЕДА! +50 XP" : "ПОРАЖЕНИЕ +10 XP");
+        let { data: p } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
+        const newXp = p.xp + (isWin ? 50 : 10);
+        await supabase.from('profiles').update({ xp: newXp, level: Math.floor(newXp/100)+1, wins: isWin ? p.wins+1 : p.wins }).eq('id', currentUser.id);
+        location.reload();
+    });
+});

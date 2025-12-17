@@ -22,23 +22,16 @@ function createDeck() {
 }
 
 io.on('connection', (socket) => {
-    // Отправка списка комнат при подключении
     socket.emit('roomsList', Object.values(rooms).map(r => ({
         id: r.id, name: r.name, players: r.players.length, isPrivate: !!r.password
     })));
 
     socket.on('createRoom', ({ name, password }) => {
-        const roomId = Math.random().toString(36).substr(2, 6);
+        const roomId = "room_" + Math.random().toString(36).substr(2, 4);
         rooms[roomId] = {
-            id: roomId,
-            name: name,
-            password: password || null,
-            players: [],
-            deck: createDeck(),
-            topCard: null,
-            turnIndex: 0,
-            currentColor: '',
-            gameStarted: false
+            id: roomId, name: name || "Стол " + roomId, password: password || null,
+            players: [], deck: createDeck(), topCard: null, turnIndex: 0,
+            currentColor: '', gameStarted: false
         };
         socket.emit('roomCreated', roomId);
         io.emit('roomsList', Object.values(rooms).map(r => ({
@@ -50,44 +43,84 @@ io.on('connection', (socket) => {
         const room = rooms[roomId];
         if (!room) return socket.emit('errorMsg', 'Комната не найдена');
         if (room.password && room.password !== password) return socket.emit('errorMsg', 'Неверный пароль');
-        if (room.players.length >= 4) return socket.emit('errorMsg', 'Комната полна');
-
+        
         socket.join(roomId);
-        room.players.push({ id: socket.id, name: username, hand: [] });
-
-        if (room.players.length >= 2 && !room.gameStarted) {
-            room.gameStarted = true;
-            room.players.forEach(p => p.hand = room.deck.splice(0, 7));
-            room.topCard = room.deck.pop();
-            room.currentColor = room.topCard.color;
-            io.to(roomId).emit('initGame', room);
-        }
-        io.emit('roomsList', Object.values(rooms).map(r => ({
-            id: r.id, name: r.name, players: r.players.length, isPrivate: !!r.password
-        })));
+        room.players.push({ id: socket.id, name: username, hand: [], isBot: false });
+        if (room.players.length >= 2) startGame(roomId);
+        io.to(roomId).emit('updateState', room);
     });
+
+    socket.on('addBot', (roomId) => {
+        const room = rooms[roomId];
+        if (room && room.players.length < 4) {
+            room.players.push({ id: "bot_" + Math.random(), name: "Бот Олег", hand: [], isBot: true });
+            if (room.players.length >= 2 && !room.gameStarted) startGame(roomId);
+            io.to(roomId).emit('updateState', room);
+        }
+    });
+
+    function startGame(roomId) {
+        const room = rooms[roomId];
+        if (room.gameStarted) return;
+        room.gameStarted = true;
+        room.players.forEach(p => p.hand = room.deck.splice(0, 7));
+        room.topCard = room.deck.pop();
+        room.currentColor = room.topCard.color;
+        io.to(roomId).emit('initGame', room);
+    }
+
+    socket.on('playCard', ({ roomId, cardIndex }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        const player = room.players[room.turnIndex];
+        if (player.id !== socket.id) return;
+
+        const card = player.hand[cardIndex];
+        if (card.color === room.currentColor || card.value === room.topCard.value) {
+            room.topCard = player.hand.splice(cardIndex, 1)[0];
+            room.currentColor = room.topCard.color;
+
+            if (player.hand.length === 0) {
+                io.to(roomId).emit('gameOver', { winner: player.name, id: player.id });
+                delete rooms[roomId];
+                return;
+            }
+
+            room.turnIndex = (room.turnIndex + 1) % room.players.length;
+            io.to(roomId).emit('updateState', room);
+            if (room.players[room.turnIndex].isBot) botTurn(roomId);
+        }
+    });
+
+    function botTurn(roomId) {
+        const room = rooms[roomId];
+        if (!room) return;
+        const bot = room.players[room.turnIndex];
+        if (!bot || !bot.isBot) return;
+
+        setTimeout(() => {
+            const index = bot.hand.findIndex(c => c.color === room.currentColor || c.value === room.topCard.value);
+            if (index !== -1) {
+                room.topCard = bot.hand.splice(index, 1)[0];
+                room.currentColor = room.topCard.color;
+            } else {
+                bot.hand.push(room.deck.pop());
+            }
+            room.turnIndex = (room.turnIndex + 1) % room.players.length;
+            io.to(roomId).emit('updateState', room);
+            if (room.players[room.turnIndex]?.isBot) botTurn(roomId);
+        }, 1500);
+    }
 
     socket.on('drawCard', (roomId) => {
         const room = rooms[roomId];
-        if (room) {
-            const player = room.players[room.turnIndex];
-            if (player.id === socket.id) {
-                player.hand.push(room.deck.pop());
-                room.turnIndex = (room.turnIndex + 1) % room.players.length;
-                io.to(roomId).emit('updateState', room);
-            }
-        }
-    });
-
-    socket.on('disconnect', () => {
-        // Логика удаления пустых комнат
-        for (let id in rooms) {
-            rooms[id].players = rooms[id].players.filter(p => p.id !== socket.id);
-            if (rooms[id].players.length === 0) delete rooms[id];
-        }
-        io.emit('roomsList', Object.values(rooms).map(r => ({
-            id: r.id, name: r.name, players: r.players.length, isPrivate: !!r.password
-        })));
+        if (!room) return;
+        const player = room.players[room.turnIndex];
+        if (player.id !== socket.id) return;
+        player.hand.push(room.deck.pop());
+        room.turnIndex = (room.turnIndex + 1) % room.players.length;
+        io.to(roomId).emit('updateState', room);
+        if (room.players[room.turnIndex]?.isBot) botTurn(roomId);
     });
 });
 
