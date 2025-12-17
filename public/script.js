@@ -1,5 +1,5 @@
-const supabaseUrl = 'ТВОЙ_URL';
-const supabaseKey = 'ТВОЙ_КЛЮЧ';
+const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
 const supabase = supabasejs.createClient(supabaseUrl, supabaseKey);
 const socket = io();
 
