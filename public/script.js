@@ -157,41 +157,21 @@ window.addEventListener('load', async () => {
             <div class="request-item">
                 <span>${sender ? sender.username : 'Unknown'}</span>
                 <div style="display:flex; gap:5px">
-                    <button class="ios-btn small primary" onclick="respondRequest(${r.id}, true)">✔</button>
-                    <button class="ios-btn small secondary" onclick="respondRequest(${r.id}, false)">✖</button>
+                    <button class="ios-btn small primary" onclick="respondRequest('${r.id}', true)">✔</button>
+                    <button class="ios-btn small secondary" onclick="respondRequest('${r.id}', false)">✖</button>
                 </div>
             </div>`;
         }).join('');
     }
 
-   window.respondRequest = async (reqId, accept) => {
-        // Убираем кавычки из ID если они есть, чтобы Supabase понял число
-        const id = String(reqId); 
-
-        if (accept) {
-            const { error } = await supabase
-                .from('friend_requests')
-                .update({ status: 'accepted' })
-                .eq('id', id);
-            
-            if (error) {
-                console.error("Ошибка принятия:", error);
-                return alert("Не удалось принять заявку: " + error.message);
-            }
-            loadFriends();
+    window.respondRequest = async (reqId, accept) => {
+        if(accept) {
+            await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', reqId);
+            loadFriends(); // Обновляем список друзей
         } else {
-            const { error } = await supabase
-                .from('friend_requests')
-                .delete()
-                .eq('id', id);
-                
-            if (error) {
-                console.error("Ошибка отклонения:", error);
-                return alert("Не удалось отклонить заявку: " + error.message);
-            }
+            await supabase.from('friend_requests').delete().eq('id', reqId);
         }
-        // Обновляем список заявок
-        loadFriendRequests();
+        loadFriendRequests(); // Обновляем список заявок
     };
 
     // 3. Загрузка списка друзей (для вкладок Друзья и Чаты)
