@@ -33,7 +33,7 @@ function getLevelInfo(totalXp) {
 
 // --- ЛОГИКА ЕЖЕДНЕВНЫХ КВЕСТОВ ---
 function getCurrentDailyQuest() {
-    // Выбираем квест на основе дня месяца, чтобы у всех был одинаковый
+    // Выбираем квест на основе дня месяца
     const dayIndex = new Date().getDate() % DAILY_QUESTS.length;
     return DAILY_QUESTS[dayIndex];
 }
@@ -110,7 +110,6 @@ window.addEventListener('load', async () => {
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('lobby-screen').classList.remove('hidden');
         
-        // Загрузка или создание профиля
         let { data: p } = await supabase.from('profiles').select('*').eq('id', u.id).single();
         if(!p) {
               const shortId = u.id.substr(0, 6);
@@ -125,7 +124,7 @@ window.addEventListener('load', async () => {
         loadInventory();
         loadFriends();
         loadFriendRequests();
-        renderDailyQuestUI(); // Инициализация квеста
+        renderDailyQuestUI(); 
         startChatListener();
         subscribeToFriendRequests();
     }
@@ -158,53 +157,56 @@ window.addEventListener('load', async () => {
         return item ? item.src : 'https://api.dicebear.com/7.x/adventurer/svg?seed=Guest';
     }
 
-    // --- ОТРИСОВКА И ЛОГИКА КВЕСТА (ИСПРАВЛЕНО) ---
+    // --- ОТРИСОВКА И ЛОГИКА КВЕСТА (ИСПРАВЛЕНО - ПРИНУДИТЕЛЬНЫЙ ПОКАЗ) ---
     function renderDailyQuestUI() {
         const quest = getCurrentDailyQuest();
         const now = new Date();
         
-        // Получаем дату последнего клейма из профиля
         let lastClaimDateString = '';
         if (profile.last_daily_claim) {
             lastClaimDateString = new Date(profile.last_daily_claim).toDateString();
         }
 
-        // Проверяем локальный прогресс
         const savedDate = localStorage.getItem('quest_date');
         let progress = parseInt(localStorage.getItem('quest_progress') || '0');
         
         if(savedDate !== now.toDateString()) {
-            progress = 0; // Новый день - сброс визуального прогресса
+            progress = 0; 
         }
 
         const box = document.querySelector('.daily-quest-box');
         const btn = document.getElementById('claim-daily');
         const statusText = document.getElementById('daily-status-text');
         
-        // Тексты
+        // Сброс стилей кнопки перед проверкой
+        btn.classList.add('hidden'); 
+        btn.style.display = 'none'; // Скрываем по умолчанию
+
         box.querySelector('h4').innerText = "Ежедневное задание";
         box.querySelector('p').innerText = quest.text;
 
-        // 1. Проверка: Уже забрали сегодня?
+        // 1. Уже забрали?
         if(lastClaimDateString === now.toDateString()) {
-            btn.classList.add('hidden');
-            statusText.innerHTML = `<span style="color:#34d399">Выполнено ✅</span>`;
+            statusText.innerHTML = `<span style="color:#34d399">Выполнено на сегодня ✅</span>`;
             return;
         }
 
-        // 2. Проверка: Выполнен ли квест?
+        // 2. Готово к получению?
         if(progress >= quest.target) {
-            // Квест выполнен, но не забран
-            statusText.innerText = "Готово к получению!";
+            statusText.innerText = "ЗАДАНИЕ ВЫПОЛНЕНО!";
+            statusText.style.color = "#34d399";
+            
+            // ПРИНУДИТЕЛЬНО ПОКАЗЫВАЕМ КНОПКУ
             btn.innerText = `Забрать ${quest.reward}💰`;
             btn.classList.remove('hidden');
-            btn.disabled = false; // Убеждаемся, что кнопка активна
+            btn.style.display = 'block'; // Перебиваем любой CSS
+            btn.style.marginTop = '10px';
+            btn.disabled = false;
             
-            // ПРИНУДИТЕЛЬНО ПЕРЕПИСЫВАЕМ ONCLICK (чтобы убрать старые обработчики)
+            // Очищаем старые события и вешаем новое
             btn.onclick = null; 
             btn.onclick = async () => {
-                console.log("Клик по кнопке награды");
-                btn.disabled = true; // Блокируем, чтобы не нажать дважды
+                btn.disabled = true;
                 btn.innerText = "Получение...";
 
                 const { error } = await supabase.from('profiles').update({ 
@@ -216,18 +218,17 @@ window.addEventListener('load', async () => {
                     profile.coins += quest.reward;
                     profile.last_daily_claim = new Date().toISOString();
                     updateProfileUI();
-                    renderDailyQuestUI(); // Перерисовываем UI
+                    renderDailyQuestUI(); 
                     alert(`Награда получена: ${quest.reward} монет!`);
                 } else {
-                    console.error(error);
-                    alert("Ошибка при получении награды. Попробуйте еще раз.");
+                    alert("Ошибка сети");
                     btn.disabled = false;
                     btn.innerText = `Забрать ${quest.reward}💰`;
                 }
             };
         } else {
-            // Квест в процессе
-            btn.classList.add('hidden');
+            // В процессе
+            statusText.style.color = "#ccc";
             statusText.innerText = `Прогресс: ${progress} / ${quest.target}`;
         }
     }
@@ -557,7 +558,7 @@ window.addEventListener('load', async () => {
         `).join('');
     };
 
-    // --- ЗАВЕРШЕНИЕ ИГРЫ ---
+    // --- GAME ENDED ---
     socket.on('gameEnded', async ({ winnerName, reward }) => {
         currentRoomId = null; 
         const modal = document.getElementById('modal-gameover');
@@ -574,9 +575,9 @@ window.addEventListener('load', async () => {
         modal.classList.remove('hidden');
 
         // --- ОБНОВЛЕНИЕ КВЕСТА ---
-        updateQuestProgress('play', 1); // Всегда считаем игру
-        if(reward.won) updateQuestProgress('win', 1); // Если победа
-        updateQuestProgress('xp', reward.xp); // Если опыт
+        updateQuestProgress('play', 1); 
+        if(reward.won) updateQuestProgress('win', 1);
+        updateQuestProgress('xp', reward.xp);
 
         // Обновляем статистику пользователя
         const newTotalXp = profile.xp + reward.xp;
@@ -599,17 +600,14 @@ window.addEventListener('load', async () => {
         }
     });
 
-    // Функция выхода в лобби с обновлением квестов
     window.backToLobby = () => {
         document.getElementById('modal-gameover').classList.add('hidden');
         document.getElementById('game-screen').classList.add('hidden');
         document.getElementById('lobby-screen').classList.remove('hidden');
-        
-        // Перерисовать статус квеста (кнопка появится здесь, если квест выполнен)
         renderDailyQuestUI(); 
     };
 
-    // --- МАГАЗИН И ИНВЕНТАРЬ ---
+    // --- SHOP & INVENTORY ---
     async function loadShop() {
         const grid = document.getElementById('shop-grid');
         grid.innerHTML = SHOP_ITEMS.map(item => {
@@ -750,7 +748,6 @@ window.addEventListener('load', async () => {
         currentRoomId = roomId;
         document.getElementById('lobby-screen').classList.add('hidden');
         document.getElementById('game-screen').classList.remove('hidden');
-        // Set initial deck skin
         document.getElementById('deck').className = 'card card-back ' + (profile.card_skin || 'skin_default');
     });
 
