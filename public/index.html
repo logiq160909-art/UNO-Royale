@@ -45,19 +45,13 @@
 
                 <nav class="nav-menu">
                     <button class="nav-btn active" onclick="switchTab('rooms', this)">🎮 Играть</button>
+                    <button class="nav-btn" onclick="switchTab('quests', this)">📜 Задания <span id="quest-badge" class="badge hidden">!</span></button>
                     <button class="nav-btn" onclick="switchTab('chats', this)">💬 Чаты <span id="chat-badge" class="badge hidden"></span></button>
                     <button class="nav-btn" onclick="switchTab('shop', this)">🛒 Магазин</button>
                     <button class="nav-btn" onclick="switchTab('leaderboard', this)">🏆 Лидеры</button>
                     <button class="nav-btn" onclick="switchTab('friends', this)">👥 Друзья <span id="req-badge" class="badge hidden"></span></button>
                     <button class="nav-btn" onclick="switchTab('profile', this)">👕 Профиль</button>
                 </nav>
-
-                <div class="daily-quest-box">
-                    <h4>Ежедневное задание</h4>
-                    <p>Сыграть 1 игру</p>
-                    <small id="daily-status-text" style="display:block;margin-top:5px;color:#ccc">...</small>
-                    <button id="claim-daily" class="ios-btn small hidden">Забрать 100💰</button>
-                </div>
 
                 <button id="logout-btn" class="ios-btn secondary mt-auto">Выйти</button>
             </aside>
@@ -70,6 +64,29 @@
                         <button onclick="openModal('modal-create')" class="ios-btn primary small">Создать стол</button>
                     </div>
                     <div id="rooms-list" class="scroll-list"></div>
+                </div>
+
+                <div id="tab-quests" class="tab-content hidden">
+                    <h3>Текущие задания</h3>
+                    <div class="quest-container-center">
+                        <div class="daily-quest-box">
+                            <h4>Ежедневное задание</h4>
+                            <p id="dq-text">Загрузка...</p>
+                            
+                            <div id="dq-progress-container" style="width:100%; margin-top:15px;">
+                                <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:5px; opacity:0.8">
+                                    <span>Прогресс</span>
+                                    <span id="dq-progress-text">0/1</span>
+                                </div>
+                                <div style="width:100%; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden">
+                                    <div id="dq-progress-bar" style="height:100%; width:0%; background:#34d399; transition: width 0.5s"></div>
+                                </div>
+                            </div>
+
+                            <div id="dq-status" style="margin-top:15px; font-weight:bold; color:#ccc"></div>
+                            <button id="claim-daily" class="claim-btn hidden">ЗАБРАТЬ НАГРАДУ</button>
+                        </div>
+                    </div>
                 </div>
 
                 <div id="tab-chats" class="tab-content hidden">
