@@ -9,7 +9,7 @@ const io = new Server(server, { cors: { origin: "*" } });
 app.use(express.static('public'));
 
 let rooms = {};
-let userSockets = {}; // Маппинг userId -> socketId
+let userSockets = {};
 
 // Экономика
 const REWARDS = {
@@ -61,7 +61,7 @@ async function broadcastGameState(roomId) {
     const sockets = await io.in(roomId).fetchSockets();
 
     const publicPlayers = room.players.map(p => ({
-        id: p.id, name: p.name, handSize: p.hand.length, isBot: p.isBot, unoSaid: p.unoSaid,
+        id: p.id, name: p.name, handSize: p.hand.length, isBot: p.isBot, quattroSaid: p.quattroSaid,
         avatar: p.avatar, banner: p.banner
     }));
 
@@ -82,17 +82,15 @@ async function broadcastGameState(roomId) {
 io.on('connection', (socket) => {
     socket.emit('roomsList', getRoomsPublicInfo());
 
-    // Регистрация пользователя для личных уведомлений
     socket.on('registerUser', (userId) => {
         userSockets[userId] = socket.id;
-        socket.userId = userId; // сохраняем в объект сокета
+        socket.userId = userId; 
     });
 
     socket.on('disconnect', () => {
         if(socket.userId) delete userSockets[socket.userId];
     });
 
-    // --- ЧАТ И ПРИГЛАШЕНИЯ ---
     socket.on('privateMessage', ({ toUserId, content, fromUsername }) => {
         const targetSocketId = userSockets[toUserId];
         if (targetSocketId) {
@@ -115,7 +113,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // --- ИГРОВАЯ ЛОГИКА ---
     socket.on('createRoom', ({ name, password }) => {
         const roomId = Math.random().toString(36).substr(2, 6);
         rooms[roomId] = {
@@ -146,7 +143,7 @@ io.on('connection', (socket) => {
         socket.join(roomId);
         room.players.push({ 
             id: socket.id, name: username, hand: [], isBot: false, 
-            unoSaid: false, avatar: avatar || 'default', banner: banner || 'default' 
+            quattroSaid: false, avatar: avatar || 'default', banner: banner || 'default' 
         });
 
         socket.emit('joinSuccess', roomId);
@@ -160,7 +157,7 @@ io.on('connection', (socket) => {
         if (room && room.players.length < 4 && !room.gameStarted) {
             room.players.push({ 
                 id: "bot_" + Math.random().toString(36).substr(2, 5), 
-                name: "Bot Alex", hand: [], isBot: true, unoSaid: false,
+                name: "Bot Alex", hand: [], isBot: true, quattroSaid: false,
                 avatar: 'bot', banner: 'default'
             });
             if (room.players.length >= 2) startGame(room);
@@ -235,19 +232,19 @@ io.on('connection', (socket) => {
         if (player.id !== socket.id) return;
 
         addCardsToPlayer(room, player, 1);
-        player.unoSaid = false; 
+        player.quattroSaid = false; 
         nextTurn(room);
         broadcastGameState(roomId);
         checkBotTurn(room);
     });
 
-    socket.on('sayUno', (roomId) => {
+    socket.on('sayQuattro', (roomId) => {
         const room = rooms[roomId];
         if(!room) return;
         const p = room.players.find(pl => pl.id === socket.id);
-        if(p && p.hand.length <= 2 && !p.unoSaid) {
-            p.unoSaid = true;
-            io.to(roomId).emit('unoEffect', p.name);
+        if(p && p.hand.length <= 2 && !p.quattroSaid) {
+            p.quattroSaid = true;
+            io.to(roomId).emit('quattroEffect', p.name);
             broadcastGameState(roomId);
         }
     });
@@ -296,8 +293,8 @@ io.on('connection', (socket) => {
                     } else room.currentColor = card.color;
 
                     if (player.hand.length === 1) {
-                        player.unoSaid = true;
-                        io.to(room.id).emit('unoEffect', player.name);
+                        player.quattroSaid = true;
+                        io.to(room.id).emit('quattroEffect', player.name);
                     }
 
                     if (card.value === 'REVERSE') {
@@ -318,7 +315,7 @@ io.on('connection', (socket) => {
                     }
                 } else {
                     addCardsToPlayer(room, player, 1);
-                    player.unoSaid = false;
+                    player.quattroSaid = false;
                 }
                 nextTurn(room);
                 broadcastGameState(room.id);

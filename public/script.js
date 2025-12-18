@@ -22,10 +22,16 @@ window.addEventListener('load', async () => {
     let activeChatFriendId = null;
     
     const SHOP_ITEMS = [
+        // АВАТАРЫ
         { id: 'av_fox', type: 'avatar', name: 'Лис', price: 500, src: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Felix' },
         { id: 'av_robot', type: 'avatar', name: 'Робот', price: 1000, src: 'https://api.dicebear.com/7.x/bottts/svg?seed=Zork' },
+        // БАННЕРЫ
         { id: 'bn_space', type: 'banner', name: 'Космос', price: 800, color: 'linear-gradient(45deg, #0b0c2a, #2a0b25)' },
-        { id: 'bn_gold', type: 'banner', name: 'Золото', price: 2000, color: 'linear-gradient(45deg, #f09819, #edde5d)' }
+        { id: 'bn_gold', type: 'banner', name: 'Золото', price: 2000, color: 'linear-gradient(45deg, #f09819, #edde5d)' },
+        // СТИЛИ КАРТ (Новые)
+        { id: 'skin_neon', type: 'card_skin', name: 'Неон', price: 1500, previewColor: '#00ffcc' },
+        { id: 'skin_gold', type: 'card_skin', name: 'Люкс', price: 3000, previewColor: '#ffd700' },
+        { id: 'skin_dark', type: 'card_skin', name: 'Стелс', price: 1200, previewColor: '#1a1a1a' }
     ];
 
     // --- АВТОРИЗАЦИЯ ---
@@ -50,9 +56,6 @@ window.addEventListener('load', async () => {
 
     async function initLobby(u) {
         user = u;
-        
-        // ВАЖНОЕ ИСПРАВЛЕНИЕ: Регистрируем сокет при каждом подключении
-        // Это чинит приглашения, если сервер перезагрузился или инет моргнул
         registerSocket(); 
         socket.on('connect', registerSocket);
 
@@ -62,10 +65,12 @@ window.addEventListener('load', async () => {
         let { data: p } = await supabase.from('profiles').select('*').eq('id', u.id).single();
         if(!p) {
               const shortId = u.id.substr(0, 6);
-              p = { id: u.id, username: u.email.split('@')[0], level: 1, xp: 0, wins: 0, coins: 0, short_id: shortId };
+              p = { id: u.id, username: u.email.split('@')[0], level: 1, xp: 0, wins: 0, coins: 0, short_id: shortId, card_skin: 'skin_default' };
               await supabase.from('profiles').insert([p]);
         }
         profile = p;
+        if(!profile.card_skin) profile.card_skin = 'skin_default'; // Fallback если поле пустое
+
         updateProfileUI();
         loadShop();
         loadInventory();
@@ -73,7 +78,7 @@ window.addEventListener('load', async () => {
         loadFriendRequests();
         checkDailyQuest();
         startChatListener();
-        subscribeToFriendRequests(); // Подписка на новые заявки
+        subscribeToFriendRequests();
     }
 
     function registerSocket() {
@@ -98,12 +103,11 @@ window.addEventListener('load', async () => {
         return item ? item.src : 'https://api.dicebear.com/7.x/adventurer/svg?seed=Guest';
     }
 
-    // --- ДРУЗЬЯ: REALTIME ПОДПИСКА ---
+    // --- ДРУЗЬЯ ---
     function subscribeToFriendRequests() {
         supabase
         .channel('friend-db-changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, (payload) => {
-            // Если изменение касается меня (я получатель или отправитель)
             if(payload.new.receiver_id === user.id || payload.new.sender_id === user.id || 
                payload.old.receiver_id === user.id || payload.old.sender_id === user.id) {
                 loadFriendRequests();
@@ -113,7 +117,6 @@ window.addEventListener('load', async () => {
         .subscribe();
     }
 
-    // --- ОТПРАВКА ЗАЯВКИ ---
     window.sendFriendRequest = async () => {
         const fid = document.getElementById('friend-id-input').value.trim();
         if(fid.length < 6) return alert("Неверный ID");
@@ -122,13 +125,11 @@ window.addEventListener('load', async () => {
         if(!targetProfile) return alert("Игрок не найден");
         if(targetProfile.id === user.id) return alert("Нельзя добавить себя");
 
-        // Проверяем существующие
         const { data: existing } = await supabase.from('friend_requests')
             .select('*')
             .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-            .or(`sender_id.eq.${targetProfile.id},receiver_id.eq.${targetProfile.id}`); // Грубая выборка, фильтруем в JS для точности
+            .or(`sender_id.eq.${targetProfile.id},receiver_id.eq.${targetProfile.id}`);
 
-        // Точный фильтр в JS
         const relation = existing ? existing.find(r => 
             (r.sender_id === user.id && r.receiver_id === targetProfile.id) || 
             (r.sender_id === targetProfile.id && r.receiver_id === user.id)
@@ -136,7 +137,7 @@ window.addEventListener('load', async () => {
 
         if(relation) {
             if(relation.status === 'accepted') return alert("Вы уже друзья!");
-            return alert("Заявка уже существует (проверьте входящие/исходящие)");
+            return alert("Заявка уже существует");
         }
 
         const { error } = await supabase.from('friend_requests').insert([{ sender_id: user.id, receiver_id: targetProfile.id, status: 'pending' }]);
@@ -147,7 +148,6 @@ window.addEventListener('load', async () => {
         }
     };
 
-    // --- ЗАГРУЗКА ЗАЯВОК ---
     async function loadFriendRequests() {
         const { data: reqs } = await supabase.from('friend_requests')
             .select('id, sender_id, status')
@@ -243,7 +243,7 @@ window.addEventListener('load', async () => {
         `).join('');
     }
 
-    // --- ЧАТ: ИСПРАВЛЕНА ЗАГРУЗКА ---
+    // --- ЧАТ ---
     window.openChatWith = async (friendId, friendName) => {
         activeChatFriendId = friendId;
         document.getElementById('chat-friend-name').innerText = friendName;
@@ -267,11 +267,9 @@ window.addEventListener('load', async () => {
         const msgContainer = document.getElementById('chat-messages');
         msgContainer.innerHTML = '<div style="text-align:center;padding:10px">Загрузка...</div>';
         
-        // Исправленный запрос: используем простой OR без вложенных AND, фильтруем лишнее
-        // Это более надежно в JS клиенте
         const { data: msgs, error } = await supabase.from('messages')
             .select('*')
-            .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`) // берем ВСЕ мои сообщения
+            .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
             .order('created_at', { ascending: true })
             .limit(100);
 
@@ -281,7 +279,6 @@ window.addEventListener('load', async () => {
              return;
         }
 
-        // Фильтруем вручную только переписку с этим другом
         const filtered = msgs.filter(m => 
             (m.sender_id === user.id && m.receiver_id === friendId) ||
             (m.sender_id === friendId && m.receiver_id === user.id)
@@ -307,7 +304,6 @@ window.addEventListener('load', async () => {
                 ${!isMine ? `<button class="ios-btn small primary" onclick="acceptInvite('${msg.room_id}')">Присоединиться</button>` : '<small style="opacity:0.7">Отправлено</small>'}
             </div>`;
         } else {
-            // Защита от XSS (простая)
             content = content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
         }
 
@@ -392,6 +388,13 @@ window.addEventListener('load', async () => {
                 renderMessage({ sender_id: data.fromUserId, content: "Приглашение в игру", is_invite: true, room_id: data.roomId });
             }
         });
+
+        socket.on('quattroEffect', (name) => {
+             const flash = document.getElementById('quattro-flash');
+             flash.innerText = `${name} QUATTRO!`;
+             flash.classList.remove('hidden');
+             setTimeout(() => flash.classList.add('hidden'), 2000);
+        });
     }
     
     window.acceptInvite = (roomId) => {
@@ -426,7 +429,6 @@ window.addEventListener('load', async () => {
         `).join('');
     };
 
-    // --- GAME END ---
     socket.on('gameEnded', async ({ winnerName, reward }) => {
         currentRoomId = null; 
         const modal = document.getElementById('modal-gameover');
@@ -466,16 +468,19 @@ window.addEventListener('load', async () => {
     // --- SHOP & INVENTORY ---
     async function loadShop() {
         const grid = document.getElementById('shop-grid');
-        grid.innerHTML = SHOP_ITEMS.map(item => `
+        grid.innerHTML = SHOP_ITEMS.map(item => {
+            let preview = '';
+            if(item.type === 'avatar') preview = `<img src="${item.src}">`;
+            else if (item.type === 'card_skin') preview = `<div style="width:50px;height:70px;background:${item.previewColor};border-radius:5px;margin:0 auto 10px;border:1px solid rgba(255,255,255,0.2)"></div>`;
+            else preview = `<div style="width:50px;height:50px;background:${item.color};border-radius:50%;margin:0 auto 10px"></div>`;
+
+            return `
             <div class="shop-item" onclick="buyItem('${item.id}', ${item.price})">
-                ${item.type === 'avatar' 
-                    ? `<img src="${item.src}">` 
-                    : `<div style="width:50px;height:50px;background:${item.color};border-radius:50%;margin:0 auto 10px"></div>`
-                }
+                ${preview}
                 <div>${item.name}</div>
                 <div class="shop-price">${item.price} 💰</div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
     }
 
     window.buyItem = async (itemId, price) => {
@@ -496,6 +501,8 @@ window.addEventListener('load', async () => {
     async function loadInventory() {
         const { data: items } = await supabase.from('user_items').select('*').eq('user_id', user.id);
         const myItems = items || [];
+        
+        // Avatars
         const avatarsDiv = document.getElementById('inv-avatars');
         avatarsDiv.innerHTML = `<div class="inv-item ${profile.avatar_url==='default'?'selected':''}" onclick="equip('avatar', 'default')">Default</div>` +
             myItems.filter(i => i.item_type === 'avatar').map(i => {
@@ -504,14 +511,34 @@ window.addEventListener('load', async () => {
                     <img src="${meta.src}" style="width:100%">
                 </div>`;
             }).join('');
+        
+        // Card Skins
+        const skinsDiv = document.getElementById('inv-skins');
+        skinsDiv.innerHTML = `<div class="inv-item ${profile.card_skin==='skin_default'?'selected':''}" onclick="equip('card_skin', 'skin_default')">Glass</div>` +
+             myItems.filter(i => i.item_type === 'card_skin').map(i => {
+                const meta = SHOP_ITEMS.find(s => s.id === i.item_id);
+                return `<div class="inv-item ${profile.card_skin===i.item_id?'selected':''}" onclick="equip('card_skin', '${i.item_id}')" style="background:${meta.previewColor}">
+                </div>`;
+            }).join('');
     }
 
     window.equip = async (type, id) => {
-        const update = type === 'avatar' ? { avatar_url: id } : { banner_url: id };
+        let update = {};
+        if(type === 'avatar') { update = { avatar_url: id }; profile.avatar_url = id; }
+        else if(type === 'banner') { update = { banner_url: id }; profile.banner_url = id; }
+        else if(type === 'card_skin') { update = { card_skin: id }; profile.card_skin = id; }
+
         await supabase.from('profiles').update(update).eq('id', user.id);
-        profile[type === 'avatar' ? 'avatar_url' : 'banner_url'] = id;
         updateProfileUI();
         loadInventory();
+        
+        // Обновляем текущую руку сразу, если мы в игре
+        if(currentRoomId) {
+             const deck = document.getElementById('deck');
+             if(deck) {
+                 deck.className = 'card card-back ' + (profile.card_skin || 'skin_default');
+             }
+        }
     };
 
     window.loadLeaderboard = async (sortBy) => {
@@ -524,7 +551,6 @@ window.addEventListener('load', async () => {
         `).join('');
     };
 
-    // --- DAILY QUEST ---
     function checkDailyQuest() {
         const now = new Date();
         const lastClaim = profile.last_daily_claim ? new Date(profile.last_daily_claim) : new Date(0);
@@ -618,6 +644,8 @@ window.addEventListener('load', async () => {
         currentRoomId = roomId;
         document.getElementById('lobby-screen').classList.add('hidden');
         document.getElementById('game-screen').classList.remove('hidden');
+        // Set initial deck skin
+        document.getElementById('deck').className = 'card card-back ' + (profile.card_skin || 'skin_default');
     });
 
     socket.on('updateState', renderGame);
@@ -632,7 +660,11 @@ window.addEventListener('load', async () => {
         document.getElementById('direction-arrow').innerText = state.direction === 1 ? '↻' : '↺'; 
         document.getElementById('color-dot').style.background = getColorHex(state.currentColor);
 
-        if(state.topCard) document.getElementById('pile').innerHTML = renderCard(state.topCard, false);
+        // Render PILE with user's skin preference logic or default? 
+        // Let's use user's skin for consistency on their screen
+        const userSkin = profile.card_skin || 'skin_default';
+
+        if(state.topCard) document.getElementById('pile').innerHTML = renderCard(state.topCard, false, 0, 0, userSkin);
 
         document.getElementById('opponents').innerHTML = state.players.filter(p => p.id !== socket.id).map(p => `
             <div class="opp-pill ${p.id === currentP.id ? 'opp-active' : ''}">
@@ -641,22 +673,22 @@ window.addEventListener('load', async () => {
                 </div>
                 <strong>${p.name}</strong>
                 <small>🃏 ${p.handSize}</small>
-                ${p.unoSaid ? '<span style="color:gold">UNO!</span>' : ''}
+                ${p.quattroSaid ? '<span style="color:gold">QUATTRO!</span>' : ''}
             </div>
         `).join('');
 
         if(me && me.hand) {
-            document.getElementById('hand').innerHTML = me.hand.map((c, i) => renderCard(c, true, i, me.hand.length)).join('');
+            document.getElementById('hand').innerHTML = me.hand.map((c, i) => renderCard(c, true, i, me.hand.length, userSkin)).join('');
         }
         
-        if(isTurn && me.hand.length === 2 && !state.players.find(p=>p.id===socket.id).unoSaid) {
-            document.getElementById('uno-controls').classList.remove('hidden');
+        if(isTurn && me.hand.length === 2 && !state.players.find(p=>p.id===socket.id).quattroSaid) {
+            document.getElementById('quattro-controls').classList.remove('hidden');
         } else {
-            document.getElementById('uno-controls').classList.add('hidden');
+            document.getElementById('quattro-controls').classList.add('hidden');
         }
     }
 
-    function renderCard(card, isHand, index, total) {
+    function renderCard(card, isHand, index, total, skinClass) {
         const colorClass = card.color === 'wild' ? 'wild' : card.color;
         const style = isHand ? `style="transform: rotate(${(index - (total-1)/2)*5}deg); margin-bottom:${Math.abs((index-(total-1)/2)*5)}px"` : '';
         const click = isHand ? `onclick="clickCard(${index}, '${card.color}')"` : '';
@@ -670,7 +702,10 @@ window.addEventListener('load', async () => {
 
         const textStyle = card.color === 'wild' ? 'style="color: white; text-shadow: 0 0 5px black;"' : '';
 
-        return `<div class="card ${colorClass}" ${click} ${style}><span ${textStyle}>${displayValue}</span></div>`;
+        // Add Skin Class
+        const finalClass = `card ${colorClass} ${skinClass}`;
+
+        return `<div class="${finalClass}" ${click} ${style}><span ${textStyle}>${displayValue}</span></div>`;
     }
 
     function getColorHex(c) { return {red:'#ff5e62',blue:'#00c6ff',green:'#56ab2f',yellow:'#f09819',wild:'#fff'}[c] || '#fff'; }
@@ -687,7 +722,7 @@ window.addEventListener('load', async () => {
     
     document.getElementById('draw-btn').onclick = () => socket.emit('drawCard', currentRoomId);
     document.getElementById('deck').onclick = () => socket.emit('drawCard', currentRoomId);
-    document.getElementById('uno-btn').onclick = () => socket.emit('sayUno', currentRoomId);
+    document.getElementById('quattro-btn').onclick = () => socket.emit('sayQuattro', currentRoomId);
     document.getElementById('bot-btn').onclick = () => socket.emit('addBot', currentRoomId);
     document.getElementById('logout-btn').onclick = async () => { await supabase.auth.signOut(); location.reload(); };
 });

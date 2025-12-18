@@ -11,7 +11,7 @@
 
 body {
     margin: 0;
-    font-family: 'SF Pro Display', -apple-system, system-ui, sans-serif; /* Более современный шрифт */
+    font-family: 'SF Pro Display', -apple-system, system-ui, sans-serif;
     color: var(--text-main);
     background: #000;
     height: 100dvh; 
@@ -144,9 +144,8 @@ body {
 .game-header { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); border-bottom: 1px solid rgba(255,255,255,0.05); }
 .game-arena { flex: 1; position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 
-/* --- LIQUID GLASS CARDS (iOS Style) --- */
+/* --- SUPERIOR GLASS CARDS --- */
 
-/* Контейнер руки - улучшаем перспективу */
 .hand-container { 
     display: flex; 
     justify-content: center; 
@@ -159,7 +158,7 @@ body {
     perspective: 1000px; 
 }
 
-/* Сама карта - основа стекла */
+/* Base Card Structure - The "Glass" */
 .card { 
     width: 90px; 
     height: 135px; 
@@ -170,112 +169,136 @@ body {
     font-size: 3rem; 
     font-weight: 700; 
     
-    /* Эффект стекла */
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(15px); 
-    -webkit-backdrop-filter: blur(15px);
-    border: 1px solid rgba(255, 255, 255, 0.4); 
+    /* Super Glass Effect */
+    background: linear-gradient(
+        135deg, 
+        rgba(255, 255, 255, 0.15) 0%, 
+        rgba(255, 255, 255, 0.05) 100%
+    );
+    backdrop-filter: blur(20px); 
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-top: 1px solid rgba(255, 255, 255, 0.5);
+    border-left: 1px solid rgba(255, 255, 255, 0.5);
+    
     box-shadow: 
-        0 8px 32px 0 rgba(0, 0, 0, 0.3), 
-        inset 0 0 0 1px rgba(255, 255, 255, 0.1); 
+        0 8px 32px 0 rgba(0, 0, 0, 0.4), 
+        inset 0 0 0 1px rgba(255, 255, 255, 0.05);
     
     color: white;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    text-shadow: 0 2px 10px rgba(0,0,0,0.5);
     user-select: none; 
     cursor: pointer; 
     position: relative; 
     transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
-    overflow: hidden;
 }
 
-/* Глянцевый блик сверху (эффект мокрого стекла) */
+/* Glossy Sheen */
 .card::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 50%;
+    inset: 0;
+    border-radius: 18px;
     background: linear-gradient(
-        180deg, 
-        rgba(255, 255, 255, 0.3) 0%, 
-        rgba(255, 255, 255, 0) 100%
+        115deg,
+        transparent 30%,
+        rgba(255,255,255,0.2) 45%,
+        rgba(255,255,255,0.0) 50%
     );
-    border-radius: 18px 18px 0 0;
     pointer-events: none;
+    z-index: 2;
 }
 
-/* Цвета карт - Полупрозрачные градиенты */
-.card.red { 
-    background: linear-gradient(135deg, rgba(255, 59, 48, 0.85), rgba(255, 59, 48, 0.5)); 
-    box-shadow: 0 10px 20px rgba(255, 59, 48, 0.3);
-}
-.card.blue { 
-    background: linear-gradient(135deg, rgba(0, 122, 255, 0.85), rgba(0, 122, 255, 0.5)); 
-    box-shadow: 0 10px 20px rgba(0, 122, 255, 0.3);
-}
-.card.green { 
-    background: linear-gradient(135deg, rgba(52, 199, 89, 0.85), rgba(52, 199, 89, 0.5)); 
-    box-shadow: 0 10px 20px rgba(52, 199, 89, 0.3);
-}
-.card.yellow { 
-    background: linear-gradient(135deg, rgba(255, 204, 0, 0.85), rgba(255, 204, 0, 0.5)); 
-    box-shadow: 0 10px 20px rgba(255, 204, 0, 0.3);
-    color: #fff; 
-}
+/* --- SKINS SYSTEM --- */
 
-/* Wild карты - Голографическое стекло */
+/* SKIN: DEFAULT (Crystal Clean) */
+.card.skin_default.red { box-shadow: 0 10px 20px rgba(255, 59, 48, 0.3); background: rgba(255, 59, 48, 0.3); }
+.card.skin_default.blue { box-shadow: 0 10px 20px rgba(0, 122, 255, 0.3); background: rgba(0, 122, 255, 0.3); }
+.card.skin_default.green { box-shadow: 0 10px 20px rgba(52, 199, 89, 0.3); background: rgba(52, 199, 89, 0.3); }
+.card.skin_default.yellow { box-shadow: 0 10px 20px rgba(255, 204, 0, 0.3); background: rgba(255, 204, 0, 0.3); }
+
+/* SKIN: NEON (Glowing Borders) */
+.card.skin_neon {
+    border-width: 2px;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: none;
+}
+.card.skin_neon.red { border-color: #ff3b30; box-shadow: 0 0 15px #ff3b30, inset 0 0 10px #ff3b30; text-shadow: 0 0 10px #ff3b30; }
+.card.skin_neon.blue { border-color: #007aff; box-shadow: 0 0 15px #007aff, inset 0 0 10px #007aff; text-shadow: 0 0 10px #007aff; }
+.card.skin_neon.green { border-color: #34c759; box-shadow: 0 0 15px #34c759, inset 0 0 10px #34c759; text-shadow: 0 0 10px #34c759; }
+.card.skin_neon.yellow { border-color: #ffcc00; box-shadow: 0 0 15px #ffcc00, inset 0 0 10px #ffcc00; text-shadow: 0 0 10px #ffcc00; }
+.card.skin_neon.wild { border-color: #fff; box-shadow: 0 0 15px #fff, inset 0 0 10px #fff; }
+
+/* SKIN: GOLD (Luxury Gradient) */
+.card.skin_gold {
+    border: 1px solid #d4af37;
+}
+.card.skin_gold::after {
+    content: ''; position: absolute; inset: 0; border-radius: 18px; opacity: 0.3; z-index: -1;
+    background: linear-gradient(45deg, #d4af37, #f0e68c);
+}
+.card.skin_gold.red { background: linear-gradient(135deg, #8B0000, #ff3b30); }
+.card.skin_gold.blue { background: linear-gradient(135deg, #00008B, #007aff); }
+.card.skin_gold.green { background: linear-gradient(135deg, #006400, #34c759); }
+.card.skin_gold.yellow { background: linear-gradient(135deg, #B8860B, #ffcc00); }
+
+/* SKIN: DARK (Stealth Matte) */
+.card.skin_dark {
+    background: rgba(30,30,30,0.9);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.8);
+}
+.card.skin_dark.red { border-bottom: 4px solid #ff3b30; }
+.card.skin_dark.blue { border-bottom: 4px solid #007aff; }
+.card.skin_dark.green { border-bottom: 4px solid #34c759; }
+.card.skin_dark.yellow { border-bottom: 4px solid #ffcc00; }
+
+/* Wild Cards (Universal) */
 .card.wild { 
     background: linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0.1));
     border: 1px solid rgba(255, 255, 255, 0.6);
 }
 .card.wild::after {
-    content: '';
-    position: absolute;
-    inset: 0;
+    content: ''; position: absolute; inset: 0;
     background: conic-gradient(from 0deg, #ff3b30, #007aff, #34c759, #ffcc00, #ff3b30);
-    opacity: 0.4;
-    filter: blur(20px);
-    z-index: -1;
+    opacity: 0.4; filter: blur(20px); z-index: -1;
     animation: spin 5s linear infinite;
+    border-radius: 18px;
 }
 
-/* Рубашка карты (Mockup Style) */
+/* Card Back */
 .card-back { 
-    background: rgba(20, 20, 20, 0.7); 
-    border: 1px solid rgba(255,255,255,0.3);
-    color: rgba(255,255,255,0.9);
-    font-size: 1.2rem;
-    font-weight: 300;
-    letter-spacing: 2px;
+    background: rgba(10, 10, 10, 0.85); 
+    border: 1px solid rgba(255,255,255,0.2);
     display: flex;
     justify-content: center;
     align-items: center;
 }
+/* Card Back Skins */
+.card-back.skin_neon { border: 2px solid #fff; box-shadow: 0 0 20px rgba(255,255,255,0.5); background: #000; }
+.card-back.skin_gold { background: linear-gradient(135deg, #111, #333); border: 1px solid #d4af37; }
+.card-back.skin_dark { background: #1a1a1a; border: 1px solid #333; }
+
 .card-back::after {
-    content: 'UNO';
+    content: 'Q'; /* Quattro */
     font-weight: 900;
     background: linear-gradient(45deg, #ff3b30, #ffcc00);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    font-size: 1.8rem;
+    font-size: 2.5rem;
     filter: drop-shadow(0 2px 10px rgba(255, 204, 0, 0.5));
 }
 
-/* Анимация руки */
-.hand-container .card { 
-    flex-shrink: 0; 
-    margin-left: -45px; 
-    transform-origin: bottom center; 
-}
+/* Hover Animation */
+.hand-container .card { flex-shrink: 0; margin-left: -45px; transform-origin: bottom center; }
 .hand-container .card:first-child { margin-left: 0; }
 .hand-container .card:hover { 
     transform: translateY(-60px) scale(1.15) rotate(0deg) !important; 
     z-index: 100; 
     margin: 0 15px;
     box-shadow: 0 20px 40px rgba(0,0,0,0.5);
-    border-color: rgba(255,255,255,0.8);
+    border-color: rgba(255,255,255,0.9);
 }
 
 @keyframes spin { 100% { transform: rotate(360deg); } }
@@ -287,8 +310,9 @@ body {
 
 .center-table { display: flex; gap: 20px; align-items: center; }
 .color-blob { width: 30px; height: 30px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 15px rgba(255,255,255,0.6); transition: background 0.3s; }
-.uno-shout-btn { background: #f09819; color: black; border: none; padding: 12px 24px; border-radius: 30px; font-weight: bold; animation: pulse 1s infinite; cursor: pointer; margin-bottom: 20px; box-shadow: 0 0 20px rgba(240, 152, 25, 0.5); }
-.uno-flash { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 5rem; font-weight: 900; color: #f09819; text-shadow: 0 0 30px black; animation: popIn 0.5s forwards; pointer-events: none; z-index: 50; }
+
+.quattro-shout-btn { background: #f09819; color: black; border: none; padding: 12px 24px; border-radius: 30px; font-weight: bold; animation: pulse 1s infinite; cursor: pointer; margin-bottom: 20px; box-shadow: 0 0 20px rgba(240, 152, 25, 0.5); }
+.quattro-flash { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 5rem; font-weight: 900; color: #f09819; text-shadow: 0 0 30px black; animation: popIn 0.5s forwards; pointer-events: none; z-index: 50; }
 
 @keyframes popIn { 0% { transform: translate(-50%, -50%) scale(0); } 70% { transform: translate(-50%, -50%) scale(1.2); } 100% { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
 @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
@@ -310,11 +334,11 @@ body {
     .nav-btn.active { background: white; color: black; }
     .content-area { height: 100%; }
     
-    /* Мобильный размер карт */
+    /* Mobile Card Size */
     .hand-container { height: 130px; }
     .card { width: 65px; height: 100px; font-size: 2rem; border-radius: 14px; }
     .hand-container .card { margin-left: -35px; }
-    .card-back::after { font-size: 1.4rem; }
+    .card-back::after { font-size: 1.8rem; }
     
     .game-arena { justify-content: flex-start; padding-top: 60px; }
 }
