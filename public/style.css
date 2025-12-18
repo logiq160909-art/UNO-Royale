@@ -92,32 +92,82 @@ body {
 
 .badge { background: #ff3b30; color: white; border-radius: 50%; padding: 2px 8px; font-size: 0.75rem; font-weight: bold; }
 
-/* --- ИСПРАВЛЕННЫЙ БЛОК ЗАДАНИЙ --- */
-.daily-quest-box { 
-    background: rgba(52, 211, 153, 0.1); 
-    border: 1px solid rgba(52, 211, 153, 0.3); 
-    padding: 15px; 
-    border-radius: 16px; 
-    margin-top: auto; 
-    position: relative; 
-    /* Фикс: используем flex и разрешаем авто-высоту */
+/* --- ОБНОВЛЕННЫЙ БЛОК ЗАДАНИЙ --- */
+.daily-quest-box {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 20px;
+    border-radius: 20px;
+    margin-top: auto;
+    
     display: flex;
     flex-direction: column;
-    gap: 5px;
-    height: auto;
-    min-height: 100px;
+    align-items: center;
+    text-align: center;
+    justify-content: center;
+    gap: 10px;
+    
+    min-height: 140px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    position: relative;
+    overflow: hidden;
 }
-.daily-quest-box::before { 
-    content: ''; 
-    position: absolute; 
-    top: 0; left: 0; right: 0; height: 100%; 
-    background: linear-gradient(180deg, rgba(52, 211, 153, 0.1), transparent); 
-    pointer-events: none; 
-    border-radius: 16px;
+
+.daily-quest-box::before {
+    content: '';
+    position: absolute;
+    top: -50%; left: -50%; width: 200%; height: 200%;
+    background: radial-gradient(circle, rgba(52, 211, 153, 0.15) 0%, transparent 60%);
+    animation: rotateBg 10s linear infinite;
+    pointer-events: none;
 }
-.daily-quest-box h4 { margin: 0; color: var(--accent-green); font-size: 0.9rem; position: relative; }
-.daily-quest-box p { margin: 0; font-size: 0.8rem; opacity: 0.9; position: relative; font-weight: bold; }
-/* ---------------------------------- */
+
+@keyframes rotateBg { 100% { transform: rotate(360deg); } }
+
+.daily-quest-box h4 {
+    margin: 0;
+    color: #34d399;
+    font-size: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    z-index: 1;
+}
+
+.daily-quest-box p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.9);
+    z-index: 1;
+}
+
+/* КНОПКА ЗАБРАТЬ НАГРАДУ */
+.claim-btn {
+    width: 100%;
+    padding: 12px 0;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+    color: white;
+    font-weight: 800;
+    font-size: 1rem;
+    cursor: pointer;
+    box-shadow: 0 5px 15px rgba(16, 185, 129, 0.4);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    z-index: 2;
+    transition: transform 0.2s;
+    animation: pulse-green 2s infinite;
+    margin-top: 5px;
+}
+
+.claim-btn:active { transform: scale(0.95); }
+
+@keyframes pulse-green {
+    0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(52, 211, 153, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+}
+/* --------------------------------- */
 
 /* Shop & Inventory */
 .shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 15px; overflow-y: auto; padding: 5px; flex: 1; }
@@ -167,7 +217,6 @@ body {
 .game-arena { flex: 1; position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 
 /* --- CARDS (FIXED COLORS) --- */
-
 .hand-container { 
     display: flex; 
     justify-content: center; 
@@ -203,7 +252,6 @@ body {
     transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
-/* Glossy Sheen */
 .card::before {
     content: '';
     position: absolute;
@@ -245,7 +293,6 @@ body {
     text-shadow: 0 1px 3px rgba(0,0,0,0.6);
 }
 
-/* WILD (Разноцветная) */
 .card.wild { 
     background: linear-gradient(135deg, rgba(255,255,255,0.3), rgba(255,255,255,0.1));
     border: 1px solid rgba(255, 255, 255, 0.6);
@@ -260,7 +307,6 @@ body {
     border-radius: 18px;
 }
 
-/* Card Back */
 .card-back { 
     background: rgba(15, 15, 15, 0.95) !important; 
     border: 1px solid rgba(255,255,255,0.3);
@@ -280,7 +326,6 @@ body {
     filter: drop-shadow(0 2px 10px rgba(255, 204, 0, 0.5));
 }
 
-/* Hover Animation */
 .hand-container .card { flex-shrink: 0; margin-left: -45px; transform-origin: bottom center; }
 .hand-container .card:first-child { margin-left: 0; }
 .hand-container .card:hover { 

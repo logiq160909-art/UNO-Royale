@@ -18,6 +18,7 @@ window.closeModals = () => {
 
 // --- СИСТЕМА УРОВНЕЙ ---
 function getLevelInfo(totalXp) {
+    // Уровень 1 = 0-100xp, Уровень 2 = 100-400xp и т.д. (квадратичная сложность)
     const level = Math.floor(Math.sqrt(totalXp / 100)) + 1;
     const startXp = Math.pow(level - 1, 2) * 100;
     const nextLevelAt = Math.pow(level, 2) * 100;
@@ -32,6 +33,7 @@ function getLevelInfo(totalXp) {
 
 // --- ЛОГИКА ЕЖЕДНЕВНЫХ КВЕСТОВ ---
 function getCurrentDailyQuest() {
+    // Выбираем квест на основе дня месяца
     const dayIndex = new Date().getDate() % DAILY_QUESTS.length;
     return DAILY_QUESTS[dayIndex];
 }
@@ -41,6 +43,7 @@ function updateQuestProgress(type, amount) {
     const savedDate = localStorage.getItem('quest_date');
     let progress = parseInt(localStorage.getItem('quest_progress') || '0');
 
+    // Если наступил новый день, сбрасываем прогресс
     if (savedDate !== today) {
         progress = 0;
         localStorage.setItem('quest_date', today);
@@ -48,6 +51,7 @@ function updateQuestProgress(type, amount) {
 
     const currentQuest = getCurrentDailyQuest();
     
+    // Обновляем только если тип действия совпадает с текущим квестом
     if (currentQuest.type === type) {
         progress += amount;
         if(progress > currentQuest.target) progress = currentQuest.target;
@@ -153,7 +157,7 @@ window.addEventListener('load', async () => {
         return item ? item.src : 'https://api.dicebear.com/7.x/adventurer/svg?seed=Guest';
     }
 
-    // --- ЛОГИКА UI КВЕСТА (ИСПРАВЛЕНА КОМПОНОВКА) ---
+    // --- ЛОГИКА UI КВЕСТА ---
     function renderDailyQuestUI() {
         const quest = getCurrentDailyQuest();
         const now = new Date();
@@ -177,34 +181,36 @@ window.addEventListener('load', async () => {
         box.querySelector('h4').innerText = "Ежедневное задание";
         box.querySelector('p').innerText = quest.text;
 
+        // Сброс видимости
+        btn.classList.add('hidden');
+        btn.style.display = 'none'; 
+        statusText.classList.remove('hidden');
+        statusText.style.display = 'block';
+
         // 1. Уже забрали?
         if(lastClaimDateString === now.toDateString()) {
-            statusText.innerHTML = `<span style="color:#34d399; font-weight:bold;">Выполнено ✅</span>`;
-            statusText.classList.remove('hidden');
-            btn.classList.add('hidden');
-            btn.style.display = 'none';
+            statusText.innerHTML = `<span style="color:#34d399; font-weight:bold; font-size:1.1rem;">✅ ВЫПОЛНЕНО</span>`;
+            statusText.style.opacity = "1";
             return;
         }
 
         // 2. Готово к получению?
         if(progress >= quest.target) {
-            // СКРЫВАЕМ ТЕКСТ СТАТУСА, ЧТОБЫ ОСВОБОДИТЬ МЕСТО КНОПКЕ
+            // Скрываем текст статуса, показываем кнопку
             statusText.classList.add('hidden');
             statusText.style.display = 'none';
 
-            // ПОКАЗЫВАЕМ КНОПКУ
-            btn.innerText = `ЗАБРАТЬ ${quest.reward}💰`;
+            // Настраиваем кнопку
+            btn.className = 'claim-btn'; 
+            btn.innerText = `ЗАБРАТЬ ${quest.reward} 💰`;
             btn.classList.remove('hidden');
             btn.style.display = 'block'; 
-            btn.style.width = '100%';
-            btn.style.marginTop = '10px';
-            btn.style.background = '#34d399'; // Зеленая кнопка
-            btn.style.color = '#064e3b';
+            btn.disabled = false;
             
-            btn.onclick = null; 
             btn.onclick = async () => {
                 btn.disabled = true;
-                btn.innerText = "⏳";
+                btn.innerText = "Зачисление...";
+                btn.style.animation = 'none';
 
                 const { error } = await supabase.from('profiles').update({ 
                     coins: profile.coins + quest.reward,
@@ -216,21 +222,20 @@ window.addEventListener('load', async () => {
                     profile.last_daily_claim = new Date().toISOString();
                     updateProfileUI();
                     renderDailyQuestUI(); 
-                    alert(`+${quest.reward} монет!`);
+                    alert(`Вы получили ${quest.reward} монет!`);
                 } else {
-                    alert("Ошибка. Попробуйте снова.");
+                    alert("Ошибка соединения.");
                     btn.disabled = false;
-                    btn.innerText = `ЗАБРАТЬ ${quest.reward}💰`;
+                    btn.innerText = `ЗАБРАТЬ ${quest.reward} 💰`;
+                    btn.style.animation = 'pulse-green 2s infinite';
                 }
             };
         } else {
             // В процессе
-            btn.classList.add('hidden');
-            btn.style.display = 'none';
-            statusText.classList.remove('hidden');
-            statusText.style.display = 'block';
-            statusText.style.color = "rgba(255,255,255,0.7)";
-            statusText.innerText = `Прогресс: ${progress} / ${quest.target}`;
+            statusText.innerHTML = `<div style="margin-top:5px; font-size:0.8rem; opacity:0.7">Прогресс: ${progress} / ${quest.target}</div>
+            <div style="width:100%; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; margin-top:5px; overflow:hidden;">
+                <div style="height:100%; width:${(progress/quest.target)*100}%; background:#34d399;"></div>
+            </div>`;
         }
     }
 
