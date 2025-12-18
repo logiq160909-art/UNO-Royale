@@ -1,5 +1,4 @@
 // --- ГЛОБАЛЬНЫЕ ФУНКЦИИ ---
-
 window.openModal = (modalId) => {
     document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden'));
     const modal = document.getElementById(modalId);
@@ -11,8 +10,7 @@ window.closeModals = () => {
 };
 
 window.addEventListener('load', async () => {
-    const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co';
-    // Внимание: Этот ключ должен быть защищен в продакшене, но оставляем для примера как было
+    const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co'; 
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
     
     const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
@@ -52,8 +50,11 @@ window.addEventListener('load', async () => {
 
     async function initLobby(u) {
         user = u;
-        // Регистрируем сокет с UserID для личных уведомлений
-        socket.emit('registerUser', user.id);
+        
+        // ВАЖНОЕ ИСПРАВЛЕНИЕ: Регистрируем сокет при каждом подключении
+        // Это чинит приглашения, если сервер перезагрузился или инет моргнул
+        registerSocket(); 
+        socket.on('connect', registerSocket);
 
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('lobby-screen').classList.remove('hidden');
@@ -72,6 +73,11 @@ window.addEventListener('load', async () => {
         loadFriendRequests();
         checkDailyQuest();
         startChatListener();
+        subscribeToFriendRequests(); // Подписка на новые заявки
+    }
+
+    function registerSocket() {
+        if(user) socket.emit('registerUser', user.id);
     }
 
     function updateProfileUI() {
@@ -82,7 +88,6 @@ window.addEventListener('load', async () => {
         document.getElementById('xp-details').innerText = `${Math.floor(profile.xp)} XP`;
         document.getElementById('coin-balance').innerText = profile.coins;
         document.getElementById('xp-bar').style.width = ((profile.xp % 100)) + '%';
-        
         const avatarSrc = getAvatarSrc(profile.avatar_url);
         document.getElementById('my-avatar-display').innerHTML = `<img src="${avatarSrc}">`;
     }
@@ -93,24 +98,37 @@ window.addEventListener('load', async () => {
         return item ? item.src : 'https://api.dicebear.com/7.x/adventurer/svg?seed=Guest';
     }
 
-    // --- ЛОГИКА ДРУЗЕЙ И ЗАЯВОК ---
-    
-    // 1. Отправка заявки
+    // --- ДРУЗЬЯ: REALTIME ПОДПИСКА ---
+    function subscribeToFriendRequests() {
+        supabase
+        .channel('friend-db-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, (payload) => {
+            // Если изменение касается меня (я получатель или отправитель)
+            if(payload.new.receiver_id === user.id || payload.new.sender_id === user.id || 
+               payload.old.receiver_id === user.id || payload.old.sender_id === user.id) {
+                loadFriendRequests();
+                loadFriends();
+            }
+        })
+        .subscribe();
+    }
+
+    // --- ОТПРАВКА ЗАЯВКИ ---
     window.sendFriendRequest = async () => {
-        const fid = document.getElementById('friend-id-input').value;
+        const fid = document.getElementById('friend-id-input').value.trim();
         if(fid.length < 6) return alert("Неверный ID");
         
         const { data: targetProfile } = await supabase.from('profiles').select('id').eq('short_id', fid).single();
         if(!targetProfile) return alert("Игрок не найден");
         if(targetProfile.id === user.id) return alert("Нельзя добавить себя");
 
-        // Проверяем, есть ли уже заявка или дружба
+        // Проверяем существующие
         const { data: existing } = await supabase.from('friend_requests')
             .select('*')
             .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-            .or(`sender_id.eq.${targetProfile.id},receiver_id.eq.${targetProfile.id}`);
-        
-        // Фильтруем точное совпадение пары
+            .or(`sender_id.eq.${targetProfile.id},receiver_id.eq.${targetProfile.id}`); // Грубая выборка, фильтруем в JS для точности
+
+        // Точный фильтр в JS
         const relation = existing ? existing.find(r => 
             (r.sender_id === user.id && r.receiver_id === targetProfile.id) || 
             (r.sender_id === targetProfile.id && r.receiver_id === user.id)
@@ -118,15 +136,18 @@ window.addEventListener('load', async () => {
 
         if(relation) {
             if(relation.status === 'accepted') return alert("Вы уже друзья!");
-            return alert("Заявка уже существует");
+            return alert("Заявка уже существует (проверьте входящие/исходящие)");
         }
 
-        await supabase.from('friend_requests').insert([{ sender_id: user.id, receiver_id: targetProfile.id, status: 'pending' }]);
-        alert("Заявка отправлена!");
-        document.getElementById('friend-id-input').value = '';
+        const { error } = await supabase.from('friend_requests').insert([{ sender_id: user.id, receiver_id: targetProfile.id, status: 'pending' }]);
+        if(error) alert("Ошибка: " + error.message);
+        else {
+            alert("Заявка отправлена!");
+            document.getElementById('friend-id-input').value = '';
+        }
     };
 
-    // 2. Загрузка входящих заявок
+    // --- ЗАГРУЗКА ЗАЯВОК ---
     async function loadFriendRequests() {
         const { data: reqs } = await supabase.from('friend_requests')
             .select('id, sender_id, status')
@@ -147,7 +168,6 @@ window.addEventListener('load', async () => {
         badge.classList.remove('hidden');
         badge.innerText = reqs.length;
 
-        // Получаем имена отправителей
         const senderIds = reqs.map(r => r.sender_id);
         const { data: profiles } = await supabase.from('profiles').select('id, username').in('id', senderIds);
 
@@ -165,18 +185,17 @@ window.addEventListener('load', async () => {
     }
 
     window.respondRequest = async (reqId, accept) => {
-        if(accept) {
-            await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', reqId);
-            loadFriends(); // Обновляем список друзей
+        const id = String(reqId);
+        if (accept) {
+            await supabase.from('friend_requests').update({ status: 'accepted' }).eq('id', id);
         } else {
-            await supabase.from('friend_requests').delete().eq('id', reqId);
+            await supabase.from('friend_requests').delete().eq('id', id);
         }
-        loadFriendRequests(); // Обновляем список заявок
+        loadFriendRequests();
+        loadFriends();
     };
 
-    // 3. Загрузка списка друзей (для вкладок Друзья и Чаты)
     async function loadFriends() {
-        // Ищем записи где статус accepted и пользователь участвует
         const { data: rels } = await supabase.from('friend_requests')
             .select('sender_id, receiver_id')
             .eq('status', 'accepted')
@@ -187,14 +206,13 @@ window.addEventListener('load', async () => {
 
         if(!rels || rels.length === 0) {
             listDiv.innerHTML = '<p style="text-align:center;opacity:0.5">Список пуст</p>';
-            chatListDiv.innerHTML = '<p style="text-align:center;opacity:0.5">Добавьте друзей для чата</p>';
+            chatListDiv.innerHTML = '<p style="text-align:center;opacity:0.5">Добавьте друзей</p>';
             return;
         }
 
         const friendIds = rels.map(r => r.sender_id === user.id ? r.receiver_id : r.sender_id);
         const { data: profiles } = await supabase.from('profiles').select('*').in('id', friendIds);
 
-        // Рендер во вкладку Друзья
         listDiv.innerHTML = profiles.map(p => `
             <div class="room-item">
                 <div style="display:flex; align-items:center; gap:10px">
@@ -210,7 +228,6 @@ window.addEventListener('load', async () => {
             </div>
         `).join('');
 
-        // Рендер во вкладку Чаты
         chatListDiv.innerHTML = profiles.map(p => `
             <div class="room-item" onclick="openChatWith('${p.id}', '${p.username}')" style="cursor:pointer">
                 <div style="display:flex; align-items:center; gap:10px">
@@ -226,17 +243,14 @@ window.addEventListener('load', async () => {
         `).join('');
     }
 
-    // --- ЧАТ И ПРИГЛАШЕНИЯ ---
-
+    // --- ЧАТ: ИСПРАВЛЕНА ЗАГРУЗКА ---
     window.openChatWith = async (friendId, friendName) => {
         activeChatFriendId = friendId;
         document.getElementById('chat-friend-name').innerText = friendName;
         
-        // UI переключение
         document.getElementById('chat-list-view').classList.add('hidden');
         document.getElementById('chat-conversation-view').classList.remove('hidden');
         
-        // Если мы не на вкладке чатов, переключаем
         const chatTabBtn = document.querySelector('button[onclick="switchTab(\'chats\', this)"]');
         window.switchTab('chats', chatTabBtn);
 
@@ -253,14 +267,32 @@ window.addEventListener('load', async () => {
         const msgContainer = document.getElementById('chat-messages');
         msgContainer.innerHTML = '<div style="text-align:center;padding:10px">Загрузка...</div>';
         
-        const { data: msgs } = await supabase.from('messages')
+        // Исправленный запрос: используем простой OR без вложенных AND, фильтруем лишнее
+        // Это более надежно в JS клиенте
+        const { data: msgs, error } = await supabase.from('messages')
             .select('*')
-            .or(`and(sender_id.eq.${user.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${user.id})`)
+            .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`) // берем ВСЕ мои сообщения
             .order('created_at', { ascending: true })
-            .limit(50);
+            .limit(100);
+
+        if(error) {
+             console.error("Ошибка чата:", error);
+             msgContainer.innerHTML = '<div style="text-align:center;color:red">Ошибка загрузки</div>';
+             return;
+        }
+
+        // Фильтруем вручную только переписку с этим другом
+        const filtered = msgs.filter(m => 
+            (m.sender_id === user.id && m.receiver_id === friendId) ||
+            (m.sender_id === friendId && m.receiver_id === user.id)
+        );
 
         msgContainer.innerHTML = '';
-        if(msgs) msgs.forEach(renderMessage);
+        if(filtered.length === 0) {
+            msgContainer.innerHTML = '<div style="text-align:center;opacity:0.5;margin-top:20px">Нет сообщений</div>';
+        } else {
+            filtered.forEach(renderMessage);
+        }
         scrollToBottom();
     }
 
@@ -272,8 +304,11 @@ window.addEventListener('load', async () => {
         if(msg.is_invite) {
             content = `<div class="invite-card">
                 <div>Приглашение в игру!</div>
-                ${!isMine ? `<button class="ios-btn small primary" onclick="acceptInvite('${msg.room_id}')">Присоединиться</button>` : '<small>Отправлено</small>'}
+                ${!isMine ? `<button class="ios-btn small primary" onclick="acceptInvite('${msg.room_id}')">Присоединиться</button>` : '<small style="opacity:0.7">Отправлено</small>'}
             </div>`;
+        } else {
+            // Защита от XSS (простая)
+            content = content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
         }
 
         const div = document.createElement('div');
@@ -288,7 +323,6 @@ window.addEventListener('load', async () => {
         c.scrollTop = c.scrollHeight;
     }
 
-    // Отправка сообщений
     document.getElementById('send-msg-btn').onclick = sendMessage;
     document.getElementById('chat-input').addEventListener('keypress', (e) => { if(e.key === 'Enter') sendMessage() });
 
@@ -304,21 +338,21 @@ window.addEventListener('load', async () => {
             is_invite: false 
         };
 
-        // Сохраняем в БД
-        await supabase.from('messages').insert([msgData]);
+        const { error } = await supabase.from('messages').insert([msgData]);
+        if(error) {
+            alert("Ошибка отправки: " + error.message);
+            return;
+        }
         
-        // Отправляем через сокет для реалтайма
         socket.emit('privateMessage', { toUserId: activeChatFriendId, content: text, fromUsername: profile.username });
-        
-        renderMessage({ ...msgData }); // Рендерим себе сразу
+        renderMessage({ ...msgData });
         input.value = '';
     }
 
-    // Отправка ПРИГЛАШЕНИЯ
+    // --- ПРИГЛАШЕНИЯ ---
     window.sendInvite = async (friendId) => {
         if(!currentRoomId) return alert("Вы не в комнате!");
         
-        // Создаем запись сообщения-приглашения
         const msgData = {
             sender_id: user.id,
             receiver_id: friendId,
@@ -328,20 +362,16 @@ window.addEventListener('load', async () => {
         };
         await supabase.from('messages').insert([msgData]);
 
-        // Отправляем сокет-сигнал
         socket.emit('sendInvite', { toUserId: friendId, roomId: currentRoomId, fromUsername: profile.username });
         alert("Приглашение отправлено!");
         window.closeModals();
     };
 
-    // Слушатель событий чата и приглашений
     function startChatListener() {
         socket.on('receiveMessage', (data) => {
-            // data: { fromUserId, content, fromUsername }
             if(activeChatFriendId === data.fromUserId) {
                 renderMessage({ sender_id: data.fromUserId, content: data.content, is_invite: false });
             } else {
-                // Показать бейдж уведомления
                 const badge = document.getElementById('chat-badge');
                 badge.classList.remove('hidden');
                 badge.innerText = "!";
@@ -349,20 +379,15 @@ window.addEventListener('load', async () => {
         });
 
         socket.on('inviteReceived', (data) => {
-            // data: { fromUsername, roomId, fromUserId }
-            // Показываем модалку
             const modal = document.getElementById('modal-invite-received');
             document.getElementById('invite-text').innerText = `${data.fromUsername} зовет вас играть!`;
             
-            // Настраиваем кнопку принятия
             document.getElementById('accept-invite-btn').onclick = () => {
                 window.tryJoin(data.roomId, false, document.getElementById('accept-invite-btn'));
                 window.closeModals();
             };
-            
             modal.classList.remove('hidden');
 
-            // Также добавляем в чат, если он открыт
             if(activeChatFriendId === data.fromUserId) {
                 renderMessage({ sender_id: data.fromUserId, content: "Приглашение в игру", is_invite: true, room_id: data.roomId });
             }
@@ -370,20 +395,16 @@ window.addEventListener('load', async () => {
     }
     
     window.acceptInvite = (roomId) => {
-        // Пробуем войти через существующую функцию
-        // Создаем фиктивную кнопку для передачи в tryJoin чтобы не ломался UI
         const dummyBtn = document.createElement('button');
         window.tryJoin(roomId, false, dummyBtn);
     };
 
-    // Окно приглашения внутри игры
     window.openInviteModal = async () => {
         const modal = document.getElementById('modal-invite-ingame');
         const list = document.getElementById('ingame-friend-list');
         list.innerHTML = 'Загрузка...';
         modal.classList.remove('hidden');
 
-        // Грузим друзей
         const { data: rels } = await supabase.from('friend_requests')
             .select('sender_id, receiver_id')
             .eq('status', 'accepted')
@@ -405,9 +426,9 @@ window.addEventListener('load', async () => {
         `).join('');
     };
 
-    // --- ОБРАБОТКА КОНЦА ИГРЫ (Оставляем как было) ---
+    // --- GAME END ---
     socket.on('gameEnded', async ({ winnerName, reward }) => {
-        currentRoomId = null; // Сброс ID комнаты
+        currentRoomId = null; 
         const modal = document.getElementById('modal-gameover');
         const title = document.getElementById('go-title');
         
@@ -420,7 +441,6 @@ window.addEventListener('load', async () => {
 
         modal.classList.remove('hidden');
 
-        // ЗАПИСЫВАЕМ ПРОГРЕСС КВЕСТА
         const todayStr = new Date().toDateString();
         localStorage.setItem('last_played_date', todayStr);
 
@@ -443,7 +463,7 @@ window.addEventListener('load', async () => {
 
     window.backToLobby = () => location.reload();
 
-    // --- МАГАЗИН (Оставляем) ---
+    // --- SHOP & INVENTORY ---
     async function loadShop() {
         const grid = document.getElementById('shop-grid');
         grid.innerHTML = SHOP_ITEMS.map(item => `
@@ -504,7 +524,7 @@ window.addEventListener('load', async () => {
         `).join('');
     };
 
-    // --- ЕЖЕДНЕВНЫЕ ЗАДАНИЯ ---
+    // --- DAILY QUEST ---
     function checkDailyQuest() {
         const now = new Date();
         const lastClaim = profile.last_daily_claim ? new Date(profile.last_daily_claim) : new Date(0);
@@ -548,20 +568,18 @@ window.addEventListener('load', async () => {
         const targetBtn = btnElement || (event ? event.target : null);
         if(targetBtn) targetBtn.classList.add('active');
         
-        // Скрываем бейджи при открытии
         if(tabName === 'friends') {
              loadFriends();
              loadFriendRequests();
              document.getElementById('req-badge').classList.add('hidden');
         }
         if(tabName === 'chats') {
-            loadFriends(); // Загружаем список для чата
+            loadFriends(); 
             document.getElementById('chat-badge').classList.add('hidden');
         }
         if(tabName === 'leaderboard') window.loadLeaderboard('wins');
     };
 
-    // Создание комнаты
     const createConfirmButton = document.getElementById('create-confirm');
     if(createConfirmButton) {
         createConfirmButton.onclick = () => {
@@ -572,7 +590,7 @@ window.addEventListener('load', async () => {
         };
     }
 
-    // --- ИГРОВАЯ ЛОГИКА ---
+    // --- GAME ---
     window.tryJoin = (id, isPriv, btn) => {
         if(btn) {
             btn.disabled = true;
@@ -638,7 +656,6 @@ window.addEventListener('load', async () => {
         }
     }
 
-    // --- ФУНКЦИЯ ОТРИСОВКИ КАРТ ---
     function renderCard(card, isHand, index, total) {
         const colorClass = card.color === 'wild' ? 'wild' : card.color;
         const style = isHand ? `style="transform: rotate(${(index - (total-1)/2)*5}deg); margin-bottom:${Math.abs((index-(total-1)/2)*5)}px"` : '';
