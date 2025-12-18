@@ -1,4 +1,11 @@
-// --- ГЛОБАЛЬНЫЕ ФУНКЦИИ ---
+// --- КОНСТАНТЫ И НАСТРОЙКИ ---
+const DAILY_QUESTS = [
+    { id: 'quest_play', text: "Сыграть 1 игру", type: 'play', target: 1, reward: 100 },
+    { id: 'quest_win', text: "Выиграть 1 игру", type: 'win', target: 1, reward: 150 },
+    { id: 'quest_xp', text: "Набрать 100 XP", type: 'xp', target: 100, reward: 200 }
+];
+
+// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 window.openModal = (modalId) => {
     document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden'));
     const modal = document.getElementById(modalId);
@@ -9,6 +16,50 @@ window.closeModals = () => {
     document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden'));
 };
 
+// --- СИСТЕМА УРОВНЕЙ ---
+function getLevelInfo(totalXp) {
+    // Уровень 1 = 0-100xp, Уровень 2 = 100-400xp и т.д. (квадратичная сложность)
+    const level = Math.floor(Math.sqrt(totalXp / 100)) + 1;
+    const startXp = Math.pow(level - 1, 2) * 100;
+    const nextLevelAt = Math.pow(level, 2) * 100;
+    
+    return {
+        level: level,
+        progress: totalXp - startXp,
+        needed: nextLevelAt - startXp,
+        percent: ((totalXp - startXp) / (nextLevelAt - startXp)) * 100
+    };
+}
+
+// --- ЛОГИКА ЕЖЕДНЕВНЫХ КВЕСТОВ ---
+function getCurrentDailyQuest() {
+    // Выбираем квест на основе дня месяца, чтобы у всех был одинаковый
+    const dayIndex = new Date().getDate() % DAILY_QUESTS.length;
+    return DAILY_QUESTS[dayIndex];
+}
+
+function updateQuestProgress(type, amount) {
+    const today = new Date().toDateString();
+    const savedDate = localStorage.getItem('quest_date');
+    let progress = parseInt(localStorage.getItem('quest_progress') || '0');
+
+    // Если наступил новый день, сбрасываем прогресс
+    if (savedDate !== today) {
+        progress = 0;
+        localStorage.setItem('quest_date', today);
+    }
+
+    const currentQuest = getCurrentDailyQuest();
+    
+    // Обновляем только если тип действия совпадает с текущим квестом
+    if (currentQuest.type === type) {
+        progress += amount;
+        if(progress > currentQuest.target) progress = currentQuest.target;
+        localStorage.setItem('quest_progress', progress);
+    }
+}
+
+// --- ОСНОВНОЙ КОД ---
 window.addEventListener('load', async () => {
     const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co'; 
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
@@ -22,13 +73,10 @@ window.addEventListener('load', async () => {
     let activeChatFriendId = null;
     
     const SHOP_ITEMS = [
-        // АВАТАРЫ
         { id: 'av_fox', type: 'avatar', name: 'Лис', price: 500, src: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Felix' },
         { id: 'av_robot', type: 'avatar', name: 'Робот', price: 1000, src: 'https://api.dicebear.com/7.x/bottts/svg?seed=Zork' },
-        // БАННЕРЫ
         { id: 'bn_space', type: 'banner', name: 'Космос', price: 800, color: 'linear-gradient(45deg, #0b0c2a, #2a0b25)' },
         { id: 'bn_gold', type: 'banner', name: 'Золото', price: 2000, color: 'linear-gradient(45deg, #f09819, #edde5d)' },
-        // СТИЛИ КАРТ (Новые)
         { id: 'skin_neon', type: 'card_skin', name: 'Неон', price: 1500, previewColor: '#00ffcc' },
         { id: 'skin_gold', type: 'card_skin', name: 'Люкс', price: 3000, previewColor: '#ffd700' },
         { id: 'skin_dark', type: 'card_skin', name: 'Стелс', price: 1200, previewColor: '#1a1a1a' }
@@ -62,6 +110,7 @@ window.addEventListener('load', async () => {
         document.getElementById('auth-screen').classList.add('hidden');
         document.getElementById('lobby-screen').classList.remove('hidden');
         
+        // Загрузка или создание профиля
         let { data: p } = await supabase.from('profiles').select('*').eq('id', u.id).single();
         if(!p) {
               const shortId = u.id.substr(0, 6);
@@ -69,14 +118,14 @@ window.addEventListener('load', async () => {
               await supabase.from('profiles').insert([p]);
         }
         profile = p;
-        if(!profile.card_skin) profile.card_skin = 'skin_default'; // Fallback если поле пустое
+        if(!profile.card_skin) profile.card_skin = 'skin_default';
 
         updateProfileUI();
         loadShop();
         loadInventory();
         loadFriends();
         loadFriendRequests();
-        checkDailyQuest();
+        renderDailyQuestUI(); // Инициализация квеста
         startChatListener();
         subscribeToFriendRequests();
     }
@@ -87,12 +136,18 @@ window.addEventListener('load', async () => {
 
     function updateProfileUI() {
         if(!profile) return;
+        
+        const lvlInfo = getLevelInfo(profile.xp);
+        profile.level = lvlInfo.level;
+
         document.getElementById('u-name').innerText = profile.username;
         document.getElementById('u-short-id').innerText = `ID: ${profile.short_id}`;
-        document.getElementById('lvl-txt').innerText = `Lvl ${profile.level}`;
-        document.getElementById('xp-details').innerText = `${Math.floor(profile.xp)} XP`;
+        
+        document.getElementById('lvl-txt').innerText = `Lvl ${lvlInfo.level}`;
+        document.getElementById('xp-details').innerText = `${Math.floor(lvlInfo.progress)} / ${lvlInfo.needed} XP`;
         document.getElementById('coin-balance').innerText = profile.coins;
-        document.getElementById('xp-bar').style.width = ((profile.xp % 100)) + '%';
+        document.getElementById('xp-bar').style.width = lvlInfo.percent + '%';
+        
         const avatarSrc = getAvatarSrc(profile.avatar_url);
         document.getElementById('my-avatar-display').innerHTML = `<img src="${avatarSrc}">`;
     }
@@ -101,6 +156,80 @@ window.addEventListener('load', async () => {
         if(!id || id === 'default') return 'https://api.dicebear.com/7.x/adventurer/svg?seed=Guest';
         const item = SHOP_ITEMS.find(i => i.id === id);
         return item ? item.src : 'https://api.dicebear.com/7.x/adventurer/svg?seed=Guest';
+    }
+
+    // --- ОТРИСОВКА И ЛОГИКА КВЕСТА (ИСПРАВЛЕНО) ---
+    function renderDailyQuestUI() {
+        const quest = getCurrentDailyQuest();
+        const now = new Date();
+        
+        // Получаем дату последнего клейма из профиля
+        let lastClaimDateString = '';
+        if (profile.last_daily_claim) {
+            lastClaimDateString = new Date(profile.last_daily_claim).toDateString();
+        }
+
+        // Проверяем локальный прогресс
+        const savedDate = localStorage.getItem('quest_date');
+        let progress = parseInt(localStorage.getItem('quest_progress') || '0');
+        
+        if(savedDate !== now.toDateString()) {
+            progress = 0; // Новый день - сброс визуального прогресса
+        }
+
+        const box = document.querySelector('.daily-quest-box');
+        const btn = document.getElementById('claim-daily');
+        const statusText = document.getElementById('daily-status-text');
+        
+        // Тексты
+        box.querySelector('h4').innerText = "Ежедневное задание";
+        box.querySelector('p').innerText = quest.text;
+
+        // 1. Проверка: Уже забрали сегодня?
+        if(lastClaimDateString === now.toDateString()) {
+            btn.classList.add('hidden');
+            statusText.innerHTML = `<span style="color:#34d399">Выполнено ✅</span>`;
+            return;
+        }
+
+        // 2. Проверка: Выполнен ли квест?
+        if(progress >= quest.target) {
+            // Квест выполнен, но не забран
+            statusText.innerText = "Готово к получению!";
+            btn.innerText = `Забрать ${quest.reward}💰`;
+            btn.classList.remove('hidden');
+            btn.disabled = false; // Убеждаемся, что кнопка активна
+            
+            // ПРИНУДИТЕЛЬНО ПЕРЕПИСЫВАЕМ ONCLICK (чтобы убрать старые обработчики)
+            btn.onclick = null; 
+            btn.onclick = async () => {
+                console.log("Клик по кнопке награды");
+                btn.disabled = true; // Блокируем, чтобы не нажать дважды
+                btn.innerText = "Получение...";
+
+                const { error } = await supabase.from('profiles').update({ 
+                    coins: profile.coins + quest.reward,
+                    last_daily_claim: new Date().toISOString()
+                }).eq('id', user.id);
+                
+                if(!error) {
+                    profile.coins += quest.reward;
+                    profile.last_daily_claim = new Date().toISOString();
+                    updateProfileUI();
+                    renderDailyQuestUI(); // Перерисовываем UI
+                    alert(`Награда получена: ${quest.reward} монет!`);
+                } else {
+                    console.error(error);
+                    alert("Ошибка при получении награды. Попробуйте еще раз.");
+                    btn.disabled = false;
+                    btn.innerText = `Забрать ${quest.reward}💰`;
+                }
+            };
+        } else {
+            // Квест в процессе
+            btn.classList.add('hidden');
+            statusText.innerText = `Прогресс: ${progress} / ${quest.target}`;
+        }
     }
 
     // --- ДРУЗЬЯ ---
@@ -345,7 +474,6 @@ window.addEventListener('load', async () => {
         input.value = '';
     }
 
-    // --- ПРИГЛАШЕНИЯ ---
     window.sendInvite = async (friendId) => {
         if(!currentRoomId) return alert("Вы не в комнате!");
         
@@ -429,6 +557,7 @@ window.addEventListener('load', async () => {
         `).join('');
     };
 
+    // --- ЗАВЕРШЕНИЕ ИГРЫ ---
     socket.on('gameEnded', async ({ winnerName, reward }) => {
         currentRoomId = null; 
         const modal = document.getElementById('modal-gameover');
@@ -437,35 +566,50 @@ window.addEventListener('load', async () => {
         title.innerText = reward.won ? "ПОБЕДА!" : "ПОРАЖЕНИЕ";
         title.style.background = reward.won ? "linear-gradient(to right, #f09819, #edde5d)" : "gray";
         title.style.webkitBackgroundClip = "text";
+        title.style.webkitTextFillColor = "transparent";
         
         document.getElementById('go-xp').innerText = `+${reward.xp} XP`;
         document.getElementById('go-coins').innerText = `+${reward.coins} 💰`;
 
         modal.classList.remove('hidden');
 
-        const todayStr = new Date().toDateString();
-        localStorage.setItem('last_played_date', todayStr);
+        // --- ОБНОВЛЕНИЕ КВЕСТА ---
+        updateQuestProgress('play', 1); // Всегда считаем игру
+        if(reward.won) updateQuestProgress('win', 1); // Если победа
+        updateQuestProgress('xp', reward.xp); // Если опыт
 
-        const newXp = profile.xp + reward.xp;
-        const newLevel = Math.floor(newXp / 100) + 1;
+        // Обновляем статистику пользователя
+        const newTotalXp = profile.xp + reward.xp;
+        const lvlInfo = getLevelInfo(newTotalXp);
+        const newLevel = lvlInfo.level;
+        
         const newCoins = profile.coins + reward.coins;
         const newWins = reward.won ? profile.wins + 1 : profile.wins;
 
         const { error } = await supabase.from('profiles').update({
-            xp: newXp, level: newLevel, coins: newCoins, wins: newWins
+            xp: newTotalXp, level: newLevel, coins: newCoins, wins: newWins
         }).eq('id', user.id);
 
         if(!error) {
-            profile.xp = newXp;
+            profile.xp = newTotalXp;
             profile.level = newLevel;
             profile.coins = newCoins;
             profile.wins = newWins;
+            updateProfileUI();
         }
     });
 
-    window.backToLobby = () => location.reload();
+    // Функция выхода в лобби с обновлением квестов
+    window.backToLobby = () => {
+        document.getElementById('modal-gameover').classList.add('hidden');
+        document.getElementById('game-screen').classList.add('hidden');
+        document.getElementById('lobby-screen').classList.remove('hidden');
+        
+        // Перерисовать статус квеста (кнопка появится здесь, если квест выполнен)
+        renderDailyQuestUI(); 
+    };
 
-    // --- SHOP & INVENTORY ---
+    // --- МАГАЗИН И ИНВЕНТАРЬ ---
     async function loadShop() {
         const grid = document.getElementById('shop-grid');
         grid.innerHTML = SHOP_ITEMS.map(item => {
@@ -502,7 +646,6 @@ window.addEventListener('load', async () => {
         const { data: items } = await supabase.from('user_items').select('*').eq('user_id', user.id);
         const myItems = items || [];
         
-        // Avatars
         const avatarsDiv = document.getElementById('inv-avatars');
         avatarsDiv.innerHTML = `<div class="inv-item ${profile.avatar_url==='default'?'selected':''}" onclick="equip('avatar', 'default')">Default</div>` +
             myItems.filter(i => i.item_type === 'avatar').map(i => {
@@ -512,7 +655,6 @@ window.addEventListener('load', async () => {
                 </div>`;
             }).join('');
         
-        // Card Skins
         const skinsDiv = document.getElementById('inv-skins');
         skinsDiv.innerHTML = `<div class="inv-item ${profile.card_skin==='skin_default'?'selected':''}" onclick="equip('card_skin', 'skin_default')">Glass</div>` +
              myItems.filter(i => i.item_type === 'card_skin').map(i => {
@@ -532,7 +674,6 @@ window.addEventListener('load', async () => {
         updateProfileUI();
         loadInventory();
         
-        // Обновляем текущую руку сразу, если мы в игре
         if(currentRoomId) {
              const deck = document.getElementById('deck');
              if(deck) {
@@ -550,41 +691,6 @@ window.addEventListener('load', async () => {
             <div class="lb-row"><span>${i+1}</span><span>${p.username}</span><span>${p[sortBy].toFixed(0)}</span></div>
         `).join('');
     };
-
-    function checkDailyQuest() {
-        const now = new Date();
-        const lastClaim = profile.last_daily_claim ? new Date(profile.last_daily_claim) : new Date(0);
-        const playedDateStr = localStorage.getItem('last_played_date');
-        
-        const btn = document.getElementById('claim-daily');
-        const statusText = document.getElementById('daily-status-text');
-
-        if(now.toDateString() === lastClaim.toDateString()) {
-            btn.classList.add('hidden');
-            if(statusText) statusText.innerText = "Выполнено ✅";
-            return;
-        }
-
-        if(playedDateStr === now.toDateString()) {
-            btn.classList.remove('hidden'); 
-            btn.innerText = "Забрать 100💰";
-            if(statusText) statusText.innerText = "Награда доступна!";
-            
-            btn.onclick = async () => {
-                await supabase.from('profiles').update({ 
-                    coins: profile.coins + 100,
-                    last_daily_claim: now.toISOString()
-                }).eq('id', user.id);
-                profile.coins += 100;
-                updateProfileUI();
-                btn.classList.add('hidden');
-                if(statusText) statusText.innerText = "Выполнено ✅";
-            };
-        } else {
-            btn.classList.add('hidden');
-            if(statusText) statusText.innerText = "Сыграйте 1 игру ⏳";
-        }
-    }
 
     window.switchTab = (tabName, btnElement) => {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
@@ -660,8 +766,6 @@ window.addEventListener('load', async () => {
         document.getElementById('direction-arrow').innerText = state.direction === 1 ? '↻' : '↺'; 
         document.getElementById('color-dot').style.background = getColorHex(state.currentColor);
 
-        // Render PILE with user's skin preference logic or default? 
-        // Let's use user's skin for consistency on their screen
         const userSkin = profile.card_skin || 'skin_default';
 
         if(state.topCard) document.getElementById('pile').innerHTML = renderCard(state.topCard, false, 0, 0, userSkin);
@@ -701,8 +805,6 @@ window.addEventListener('load', async () => {
         else if(card.value === '+2') displayValue = '+2'; 
 
         const textStyle = card.color === 'wild' ? 'style="color: white; text-shadow: 0 0 5px black;"' : '';
-
-        // Add Skin Class
         const finalClass = `card ${colorClass} ${skinClass}`;
 
         return `<div class="${finalClass}" ${click} ${style}><span ${textStyle}>${displayValue}</span></div>`;
