@@ -144,7 +144,7 @@ body {
 .game-header { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); border-bottom: 1px solid rgba(255,255,255,0.05); }
 .game-arena { flex: 1; position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 
-/* --- SUPERIOR GLASS CARDS --- */
+/* --- CARDS (FIXED COLORS) --- */
 
 .hand-container { 
     display: flex; 
@@ -168,16 +168,11 @@ body {
     align-items: center; 
     font-size: 3rem; 
     font-weight: 700; 
-    
-    /* Базовая структура стекла без сильной заливки, чтобы цвет скина решал */
-    background: rgba(255, 255, 255, 0.05); 
-    
+    background: rgba(40, 40, 40, 0.6); /* Базовый фон */
     backdrop-filter: blur(15px); 
     -webkit-backdrop-filter: blur(15px);
-    
-    border: 1px solid rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-    
     color: white;
     text-shadow: 0 2px 4px rgba(0,0,0,0.4);
     user-select: none; 
@@ -186,7 +181,7 @@ body {
     transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
-/* Glossy Sheen - Блик */
+/* Glossy Sheen */
 .card::before {
     content: '';
     position: absolute;
@@ -194,8 +189,8 @@ body {
     border-radius: 18px;
     background: linear-gradient(
         135deg,
-        rgba(255, 255, 255, 0.4) 0%,
-        rgba(255, 255, 255, 0.1) 20%,
+        rgba(255, 255, 255, 0.3) 0%,
+        rgba(255, 255, 255, 0.05) 30%,
         transparent 50%,
         rgba(255, 255, 255, 0.05) 100%
     );
@@ -203,96 +198,61 @@ body {
     z-index: 2;
 }
 
-/* --- SKINS SYSTEM --- */
+/* --- ЦВЕТА КАРТ (ЯРКИЕ) --- */
 
-/* SKIN: DEFAULT (Насыщенное цветное стекло) */
-.card.skin_default.red { 
-    background: linear-gradient(135deg, rgba(255, 59, 48, 0.9), rgba(255, 59, 48, 0.6));
-    box-shadow: 0 10px 20px rgba(255, 59, 48, 0.4), inset 0 0 0 1px rgba(255,255,255,0.2); 
-}
-.card.skin_default.blue { 
-    background: linear-gradient(135deg, rgba(0, 122, 255, 0.9), rgba(0, 122, 255, 0.6));
-    box-shadow: 0 10px 20px rgba(0, 122, 255, 0.4), inset 0 0 0 1px rgba(255,255,255,0.2);
-}
-.card.skin_default.green { 
-    background: linear-gradient(135deg, rgba(52, 199, 89, 0.9), rgba(52, 199, 89, 0.6));
-    box-shadow: 0 10px 20px rgba(52, 199, 89, 0.4), inset 0 0 0 1px rgba(255,255,255,0.2);
-}
-.card.skin_default.yellow { 
-    background: linear-gradient(135deg, rgba(255, 204, 0, 0.95), rgba(255, 204, 0, 0.7));
-    box-shadow: 0 10px 20px rgba(255, 204, 0, 0.4), inset 0 0 0 1px rgba(255,255,255,0.2);
-    color: #fff;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+/* Используем !important чтобы перебить любые конфликты и прозрачность */
+
+.card.red { 
+    background: linear-gradient(135deg, rgba(220, 40, 40, 0.95), rgba(255, 80, 80, 0.75)) !important;
+    box-shadow: 0 5px 20px rgba(220, 40, 40, 0.4);
+    border: 1px solid rgba(255, 100, 100, 0.6);
 }
 
-/* SKIN: NEON (Glowing Borders) */
-.card.skin_neon {
-    border-width: 2px;
-    background: rgba(0,0,0,0.85); /* Темный фон для контраста */
-    backdrop-filter: none;
+.card.blue { 
+    background: linear-gradient(135deg, rgba(0, 100, 255, 0.95), rgba(60, 160, 255, 0.75)) !important;
+    box-shadow: 0 5px 20px rgba(0, 100, 255, 0.4);
+    border: 1px solid rgba(100, 180, 255, 0.6);
 }
-.card.skin_neon.red { border-color: #ff3b30; box-shadow: 0 0 15px #ff3b30, inset 0 0 15px rgba(255, 59, 48, 0.2); text-shadow: 0 0 10px #ff3b30; color: #ff3b30; }
-.card.skin_neon.blue { border-color: #007aff; box-shadow: 0 0 15px #007aff, inset 0 0 15px rgba(0, 122, 255, 0.2); text-shadow: 0 0 10px #007aff; color: #007aff; }
-.card.skin_neon.green { border-color: #34c759; box-shadow: 0 0 15px #34c759, inset 0 0 15px rgba(52, 199, 89, 0.2); text-shadow: 0 0 10px #34c759; color: #34c759; }
-.card.skin_neon.yellow { border-color: #ffcc00; box-shadow: 0 0 15px #ffcc00, inset 0 0 15px rgba(255, 204, 0, 0.2); text-shadow: 0 0 10px #ffcc00; color: #ffcc00; }
-.card.skin_neon.wild { border-color: #fff; box-shadow: 0 0 15px #fff, inset 0 0 10px #fff; }
 
-/* SKIN: GOLD (Luxury Gradient) */
-.card.skin_gold {
-    border: 1px solid #d4af37;
+.card.green { 
+    background: linear-gradient(135deg, rgba(40, 180, 60, 0.95), rgba(90, 220, 100, 0.75)) !important;
+    box-shadow: 0 5px 20px rgba(40, 180, 60, 0.4);
+    border: 1px solid rgba(100, 255, 120, 0.6);
 }
-.card.skin_gold::after {
-    content: ''; position: absolute; inset: 0; border-radius: 18px; opacity: 0.3; z-index: -1;
-    background: linear-gradient(45deg, #d4af37, #f0e68c);
-}
-.card.skin_gold.red { background: linear-gradient(135deg, #8B0000, #ff3b30); }
-.card.skin_gold.blue { background: linear-gradient(135deg, #00008B, #007aff); }
-.card.skin_gold.green { background: linear-gradient(135deg, #006400, #34c759); }
-.card.skin_gold.yellow { background: linear-gradient(135deg, #B8860B, #ffcc00); }
 
-/* SKIN: DARK (Stealth Matte) */
-.card.skin_dark {
-    background: rgba(30,30,30,0.95);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: rgba(255,255,255,0.9);
+.card.yellow { 
+    background: linear-gradient(135deg, rgba(240, 180, 0, 0.95), rgba(255, 220, 50, 0.75)) !important;
+    box-shadow: 0 5px 20px rgba(240, 180, 0, 0.4);
+    border: 1px solid rgba(255, 230, 100, 0.6);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
 }
-.card.skin_dark.red { border-bottom: 6px solid #ff3b30; }
-.card.skin_dark.blue { border-bottom: 6px solid #007aff; }
-.card.skin_dark.green { border-bottom: 6px solid #34c759; }
-.card.skin_dark.yellow { border-bottom: 6px solid #ffcc00; }
 
-/* Wild Cards (Universal) */
+/* WILD (Разноцветная) */
 .card.wild { 
-    background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.4)); /* Более белая основа */
-    border: 1px solid rgba(255, 255, 255, 0.8);
-    color: #333; /* Темный текст для контраста на белом */
-    text-shadow: none;
+    background: linear-gradient(135deg, rgba(255,255,255,0.3), rgba(255,255,255,0.1));
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    color: #fff;
+    text-shadow: 0 0 5px black;
 }
 .card.wild::after {
     content: ''; position: absolute; inset: 0;
     background: conic-gradient(from 0deg, #ff3b30, #007aff, #34c759, #ffcc00, #ff3b30);
-    opacity: 0.6; filter: blur(25px); z-index: -1;
+    opacity: 0.5; filter: blur(25px); z-index: -1;
     animation: spin 5s linear infinite;
     border-radius: 18px;
 }
 
 /* Card Back */
 .card-back { 
-    background: rgba(10, 10, 10, 0.9); /* Почти непрозрачная рубашка */
-    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(15, 15, 15, 0.95) !important; 
+    border: 1px solid rgba(255,255,255,0.3);
     display: flex;
     justify-content: center;
     align-items: center;
-    color: white;
-    text-shadow: none;
 }
-/* Card Back Skins */
-.card-back.skin_neon { border: 2px solid #fff; box-shadow: 0 0 20px rgba(255,255,255,0.5); background: #000; }
-.card-back.skin_gold { background: linear-gradient(135deg, #111, #333); border: 1px solid #d4af37; }
-.card-back.skin_dark { background: #1a1a1a; border: 1px solid #333; }
 
 .card-back::after {
-    content: 'Q'; /* Quattro */
+    content: 'Q'; 
     font-weight: 900;
     background: linear-gradient(45deg, #ff3b30, #ffcc00);
     -webkit-background-clip: text;
