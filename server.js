@@ -53,6 +53,10 @@ function getNextPlayerIndex(room, step = 1) {
 
 function nextTurn(room) {
     room.turnIndex = getNextPlayerIndex(room, 1);
+    // Сбрасываем флаг "взял карту" для следующего игрока
+    if (room.players[room.turnIndex]) {
+        room.players[room.turnIndex].hasDrawn = false;
+    }
 }
 
 async function broadcastGameState(roomId) {
@@ -74,7 +78,11 @@ async function broadcastGameState(roomId) {
     for (const socket of sockets) {
         const player = room.players.find(p => p.id === socket.id);
         if (player) {
-            socket.emit('updateState', { ...baseState, me: { hand: player.hand } });
+            // Передаем также флаг hasDrawn, чтобы клиент знал, менять ли кнопку на "Пропустить"
+            socket.emit('updateState', { 
+                ...baseState, 
+                me: { hand: player.hand, hasDrawn: player.hasDrawn } 
+            });
         }
     }
 }
@@ -143,7 +151,8 @@ io.on('connection', (socket) => {
         socket.join(roomId);
         room.players.push({ 
             id: socket.id, name: username, hand: [], isBot: false, 
-            quattroSaid: false, avatar: avatar || 'default', banner: banner || 'default' 
+            quattroSaid: false, avatar: avatar || 'default', banner: banner || 'default',
+            hasDrawn: false // Инициализация флага
         });
 
         socket.emit('joinSuccess', roomId);
@@ -158,7 +167,8 @@ io.on('connection', (socket) => {
             room.players.push({ 
                 id: "bot_" + Math.random().toString(36).substr(2, 5), 
                 name: "Bot Alex", hand: [], isBot: true, quattroSaid: false,
-                avatar: 'bot', banner: 'default'
+                avatar: 'bot', banner: 'default',
+                hasDrawn: false
             });
             if (room.players.length >= 2) startGame(room);
             else broadcastGameState(roomId);
@@ -169,7 +179,11 @@ io.on('connection', (socket) => {
         room.gameStarted = true;
         room.deck = createDeck();
         room.direction = 1;
-        room.players.forEach(p => p.hand = room.deck.splice(0, 7));
+        room.players.forEach(p => {
+            p.hand = room.deck.splice(0, 7);
+            p.hasDrawn = false;
+        });
+        
         do { room.topCard = room.deck.pop(); } while (room.topCard.color === 'wild');
         room.currentColor = room.topCard.color;
         room.turnIndex = Math.floor(Math.random() * room.players.length);
@@ -225,17 +239,43 @@ io.on('connection', (socket) => {
         }
     });
 
+    // --- НОВАЯ ЛОГИКА ВЗЯТИЯ КАРТЫ ---
     socket.on('drawCard', (roomId) => {
         const room = rooms[roomId];
         if (!room) return;
         const player = room.players[room.turnIndex];
         if (player.id !== socket.id) return;
 
-        addCardsToPlayer(room, player, 1);
+        // Если игрок уже взял карту в этот ход, значит он нажал кнопку второй раз -> это ПРОПУСК ХОДА
+        if (player.hasDrawn) {
+            nextTurn(room);
+            broadcastGameState(roomId);
+            checkBotTurn(room);
+            return;
+        }
+
+        // Если ещё не брал, даем карту
+        if (room.deck.length === 0) room.deck = createDeck();
+        const card = room.deck.pop();
+        player.hand.push(card);
+        player.hasDrawn = true; // Запоминаем, что взял
         player.quattroSaid = false; 
-        nextTurn(room);
-        broadcastGameState(roomId);
-        checkBotTurn(room);
+
+        // Проверяем, подходит ли карта
+        const isPlayable = (card.color === room.currentColor) || 
+                           (card.value === room.topCard.value) || 
+                           (card.color === 'wild');
+
+        if (isPlayable) {
+            // Если подходит, НЕ передаем ход. Игрок увидит карту и сможет её сыграть.
+            // Или нажать кнопку еще раз, чтобы пропустить.
+            broadcastGameState(roomId);
+        } else {
+            // Если карта не подходит, сразу передаем ход (как раньше)
+            nextTurn(room);
+            broadcastGameState(roomId);
+            checkBotTurn(room);
+        }
     });
 
     socket.on('sayQuattro', (roomId) => {

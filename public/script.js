@@ -14,7 +14,6 @@ function getLevelInfo(totalXp) {
     const level = Math.floor(Math.sqrt(totalXp / 100)) + 1;
     const startXp = Math.pow(level - 1, 2) * 100;
     const nextLevelAt = Math.pow(level, 2) * 100;
-    
     return {
         level: level,
         progress: totalXp - startXp,
@@ -25,7 +24,6 @@ function getLevelInfo(totalXp) {
 
 // --- ЛОГИКА ЕЖЕДНЕВНЫХ КВЕСТОВ ---
 function getCurrentDailyQuest() {
-    // Выбираем квест на основе дня месяца (циклично)
     const dayIndex = new Date().getDate() % DAILY_QUESTS.length;
     return DAILY_QUESTS[dayIndex];
 }
@@ -35,7 +33,6 @@ function updateQuestProgress(type, amount) {
     const savedDate = localStorage.getItem('quest_date');
     let progress = parseInt(localStorage.getItem('quest_progress') || '0');
 
-    // Если наступил новый день, сбрасываем прогресс
     if (savedDate !== today) {
         progress = 0;
         localStorage.setItem('quest_date', today);
@@ -43,7 +40,6 @@ function updateQuestProgress(type, amount) {
 
     const currentQuest = getCurrentDailyQuest();
     
-    // Обновляем только если тип действия совпадает с текущим квестом
     if (currentQuest.type === type) {
         progress += amount;
         if(progress > currentQuest.target) progress = currentQuest.target;
@@ -202,7 +198,7 @@ window.addEventListener('load', async () => {
 
         // 2. Готово к получению?
         if(progress >= quest.target) {
-            badge.classList.remove('hidden'); // Показываем ! в меню
+            badge.classList.remove('hidden'); 
             badge.innerText = "!";
             
             statusDiv.innerHTML = `<span style="color:#f09819">Награда доступна!</span>`;
@@ -749,7 +745,7 @@ window.addEventListener('load', async () => {
             </div>`).join('');
     });
 
-    // --- НОВОЕ: АВТОМАТИЧЕСКИЙ ВХОД ПОСЛЕ СОЗДАНИЯ ---
+    // --- АВТОМАТИЧЕСКИЙ ВХОД ПОСЛЕ СОЗДАНИЯ ---
     socket.on('roomCreated', (roomId) => {
         const password = document.getElementById('r-pass').value;
         socket.emit('joinRoom', { 
@@ -760,7 +756,6 @@ window.addEventListener('load', async () => {
             banner: profile.banner_url 
         });
     });
-    // --------------------------------------------------
 
     socket.on('joinSuccess', (roomId) => {
         currentRoomId = roomId;
@@ -780,6 +775,17 @@ window.addEventListener('load', async () => {
         document.getElementById('turn-txt').style.color = isTurn ? '#34d399' : '#fff';
         document.getElementById('direction-arrow').innerText = state.direction === 1 ? '↻' : '↺'; 
         document.getElementById('color-dot').style.background = getColorHex(state.currentColor);
+
+        // --- ЛОГИКА КНОПКИ "ВЗЯТЬ КАРТУ" / "ПРОПУСТИТЬ" ---
+        const drawBtn = document.getElementById('draw-btn');
+        if (state.me && state.me.hasDrawn) {
+            drawBtn.innerText = "Пропустить ход";
+            drawBtn.style.background = "rgba(255,255,255,0.2)"; // Визуально меняем стиль
+        } else {
+            drawBtn.innerText = "Взять карту";
+            drawBtn.style.background = ""; // Сброс стиля
+        }
+        // --------------------------------------------------
 
         const userSkin = profile.card_skin || 'skin_default';
 
