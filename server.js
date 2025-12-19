@@ -53,7 +53,7 @@ function getNextPlayerIndex(room, step = 1) {
 
 function nextTurn(room) {
     room.turnIndex = getNextPlayerIndex(room, 1);
-    // Сбрасываем флаг "взял карту" для следующего игрока
+    // Сбрасываем статус "взял карту" для следующего игрока
     if (room.players[room.turnIndex]) {
         room.players[room.turnIndex].hasDrawn = false;
     }
@@ -78,7 +78,7 @@ async function broadcastGameState(roomId) {
     for (const socket of sockets) {
         const player = room.players.find(p => p.id === socket.id);
         if (player) {
-            // Передаем также флаг hasDrawn, чтобы клиент знал, менять ли кнопку на "Пропустить"
+            // Отправляем флаг hasDrawn, чтобы клиент знал состояние кнопки
             socket.emit('updateState', { 
                 ...baseState, 
                 me: { hand: player.hand, hasDrawn: player.hasDrawn } 
@@ -152,7 +152,7 @@ io.on('connection', (socket) => {
         room.players.push({ 
             id: socket.id, name: username, hand: [], isBot: false, 
             quattroSaid: false, avatar: avatar || 'default', banner: banner || 'default',
-            hasDrawn: false // Инициализация флага
+            hasDrawn: false // Инициализация
         });
 
         socket.emit('joinSuccess', roomId);
@@ -239,14 +239,14 @@ io.on('connection', (socket) => {
         }
     });
 
-    // --- НОВАЯ ЛОГИКА ВЗЯТИЯ КАРТЫ ---
+    // --- ИСПРАВЛЕННАЯ ЛОГИКА ВЗЯТИЯ КАРТЫ ---
     socket.on('drawCard', (roomId) => {
         const room = rooms[roomId];
         if (!room) return;
         const player = room.players[room.turnIndex];
         if (player.id !== socket.id) return;
 
-        // Если игрок уже взял карту в этот ход, значит он нажал кнопку второй раз -> это ПРОПУСК ХОДА
+        // Если игрок уже взял карту и нажал еще раз -> ПРОПУСТИТЬ ХОД
         if (player.hasDrawn) {
             nextTurn(room);
             broadcastGameState(roomId);
@@ -254,24 +254,24 @@ io.on('connection', (socket) => {
             return;
         }
 
-        // Если ещё не брал, даем карту
-        if (room.deck.length === 0) room.deck = createDeck();
-        const card = room.deck.pop();
-        player.hand.push(card);
+        // Берем карту
+        addCardsToPlayer(room, player, 1);
         player.hasDrawn = true; // Запоминаем, что взял
-        player.quattroSaid = false; 
+        player.quattroSaid = false;
+        
+        const drawnCard = player.hand[player.hand.length - 1];
 
         // Проверяем, подходит ли карта
-        const isPlayable = (card.color === room.currentColor) || 
-                           (card.value === room.topCard.value) || 
-                           (card.color === 'wild');
+        const isPlayable = (drawnCard.color === room.currentColor) || 
+                           (drawnCard.value === room.topCard.value) || 
+                           (drawnCard.color === 'wild');
 
         if (isPlayable) {
-            // Если подходит, НЕ передаем ход. Игрок увидит карту и сможет её сыграть.
-            // Или нажать кнопку еще раз, чтобы пропустить.
+            // Если карту можно сыграть, НЕ передаем ход.
+            // Обновляем состояние, чтобы клиент увидел карту и кнопку "Пропустить".
             broadcastGameState(roomId);
         } else {
-            // Если карта не подходит, сразу передаем ход (как раньше)
+            // Если карту нельзя сыграть, ход переходит автоматически.
             nextTurn(room);
             broadcastGameState(roomId);
             checkBotTurn(room);
