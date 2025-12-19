@@ -1,11 +1,4 @@
-// --- КОНСТАНТЫ И НАСТРОЙКИ ---
-const DAILY_QUESTS = [
-    { id: 'quest_play', text: "Сыграть 1 игру", type: 'play', target: 1, reward: 100 },
-    { id: 'quest_win', text: "Выиграть 1 игру", type: 'win', target: 1, reward: 150 },
-    { id: 'quest_xp', text: "Набрать 100 XP", type: 'xp', target: 100, reward: 200 }
-];
-
-// --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
+// --- ГЛОБАЛЬНЫЕ ФУНКЦИИ ---
 window.openModal = (modalId) => {
     document.querySelectorAll('.overlay').forEach(e => e.classList.add('hidden'));
     const modal = document.getElementById(modalId);
@@ -32,6 +25,7 @@ function getLevelInfo(totalXp) {
 
 // --- ЛОГИКА ЕЖЕДНЕВНЫХ КВЕСТОВ ---
 function getCurrentDailyQuest() {
+    // Выбираем квест на основе дня месяца (циклично)
     const dayIndex = new Date().getDate() % DAILY_QUESTS.length;
     return DAILY_QUESTS[dayIndex];
 }
@@ -41,6 +35,7 @@ function updateQuestProgress(type, amount) {
     const savedDate = localStorage.getItem('quest_date');
     let progress = parseInt(localStorage.getItem('quest_progress') || '0');
 
+    // Если наступил новый день, сбрасываем прогресс
     if (savedDate !== today) {
         progress = 0;
         localStorage.setItem('quest_date', today);
@@ -48,6 +43,7 @@ function updateQuestProgress(type, amount) {
 
     const currentQuest = getCurrentDailyQuest();
     
+    // Обновляем только если тип действия совпадает с текущим квестом
     if (currentQuest.type === type) {
         progress += amount;
         if(progress > currentQuest.target) progress = currentQuest.target;
@@ -55,7 +51,13 @@ function updateQuestProgress(type, amount) {
     }
 }
 
-// --- ОСНОВНОЙ КОД ---
+// --- КОНСТАНТЫ И НАСТРОЙКИ ---
+const DAILY_QUESTS = [
+    { id: 'quest_play', text: "Сыграть 1 игру", type: 'play', target: 1, reward: 100 },
+    { id: 'quest_win', text: "Выиграть 1 игру", type: 'win', target: 1, reward: 150 },
+    { id: 'quest_xp', text: "Набрать 100 XP", type: 'xp', target: 100, reward: 200 }
+];
+
 window.addEventListener('load', async () => {
     const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co'; 
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
@@ -193,14 +195,14 @@ window.addEventListener('load', async () => {
             return;
         }
 
-        // Обновляем прогресс бар
+        // Обновляем прогресс
         const percent = Math.min((progress / quest.target) * 100, 100);
         progBar.style.width = percent + '%';
         progTxt.innerText = `${progress}/${quest.target}`;
 
         // 2. Готово к получению?
         if(progress >= quest.target) {
-            badge.classList.remove('hidden'); // Показываем бейдж в меню
+            badge.classList.remove('hidden'); // Показываем ! в меню
             badge.innerText = "!";
             
             statusDiv.innerHTML = `<span style="color:#f09819">Награда доступна!</span>`;
@@ -746,6 +748,19 @@ window.addEventListener('load', async () => {
                 <button class="ios-btn small" onclick="tryJoin('${r.id}', ${r.isPrivate}, this)">Войти</button>
             </div>`).join('');
     });
+
+    // --- НОВОЕ: АВТОМАТИЧЕСКИЙ ВХОД ПОСЛЕ СОЗДАНИЯ ---
+    socket.on('roomCreated', (roomId) => {
+        const password = document.getElementById('r-pass').value;
+        socket.emit('joinRoom', { 
+            roomId: roomId, 
+            password: password, 
+            username: profile.username,
+            avatar: profile.avatar_url, 
+            banner: profile.banner_url 
+        });
+    });
+    // --------------------------------------------------
 
     socket.on('joinSuccess', (roomId) => {
         currentRoomId = roomId;
