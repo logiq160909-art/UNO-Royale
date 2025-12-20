@@ -54,6 +54,8 @@ const DAILY_QUESTS = [
     { id: 'quest_xp', text: "Набрать 100 XP", type: 'xp', target: 100, reward: 200 }
 ];
 
+let timerInterval = null;
+
 window.addEventListener('load', async () => {
     const supabaseUrl = 'https://wfjpudyikqphplxhovfm.supabase.co'; 
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmanB1ZHlpa3FwaHBseGhvdmZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU5MDc2NzEsImV4cCI6MjA4MTQ4MzY3MX0.AKgEfuvOYDQPlTf0NoOt5NDeldkSTH_XyFSH9EOIHmk';
@@ -180,28 +182,28 @@ window.addEventListener('load', async () => {
         // Сброс видимости
         btn.classList.add('hidden');
         badge.classList.add('hidden');
-        statusDiv.innerHTML = '';
+        if(statusDiv) statusDiv.innerHTML = '';
         
         // 1. Уже забрали?
         if(lastClaimDateString === now.toDateString()) {
             progBar.style.width = '100%';
             progBar.style.background = '#34d399';
-            progTxt.innerText = `${quest.target}/${quest.target}`;
-            statusDiv.innerHTML = `<span style="color:#34d399">✅ ЗАДАНИЕ ВЫПОЛНЕНО</span>`;
+            if(progTxt) progTxt.innerText = `${quest.target}/${quest.target}`;
+            if(statusDiv) statusDiv.innerHTML = `<span style="color:#34d399">✅ ЗАДАНИЕ ВЫПОЛНЕНО</span>`;
             return;
         }
 
         // Обновляем прогресс
         const percent = Math.min((progress / quest.target) * 100, 100);
         progBar.style.width = percent + '%';
-        progTxt.innerText = `${progress}/${quest.target}`;
+        if(progTxt) progTxt.innerText = `${progress}/${quest.target}`;
 
         // 2. Готово к получению?
         if(progress >= quest.target) {
             badge.classList.remove('hidden'); 
             badge.innerText = "!";
             
-            statusDiv.innerHTML = `<span style="color:#f09819">Награда доступна!</span>`;
+            if(statusDiv) statusDiv.innerHTML = `<span style="color:#f09819">Награда доступна!</span>`;
             btn.classList.remove('hidden');
             btn.disabled = false;
             
@@ -226,7 +228,7 @@ window.addEventListener('load', async () => {
                     btn.innerText = `ЗАБРАТЬ ${quest.reward} 💰`;
                 }
             };
-        } else {
+        } else if(statusDiv) {
             statusDiv.innerText = "В процессе...";
         }
     }
@@ -522,6 +524,32 @@ window.addEventListener('load', async () => {
              flash.classList.remove('hidden');
              setTimeout(() => flash.classList.add('hidden'), 2000);
         });
+
+        socket.on('serverMessage', (msg) => {
+             const flash = document.getElementById('quattro-flash');
+             flash.innerText = msg;
+             flash.style.fontSize = "2rem";
+             flash.classList.remove('hidden');
+             setTimeout(() => flash.classList.add('hidden'), 3000);
+        });
+        
+        // Обработка кика за AFK
+        socket.on('kickedAFK', async (penalty) => {
+            currentRoomId = null;
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('lobby-screen').classList.remove('hidden');
+            
+            alert(`Вы были исключены за бездействие! Штраф: -${penalty.coins} монет и -${penalty.xp} XP.`);
+            
+            // Применяем штраф в БД
+            const newCoins = Math.max(0, profile.coins - penalty.coins);
+            const newXp = Math.max(0, profile.xp - penalty.xp);
+            
+            await supabase.from('profiles').update({ coins: newCoins, xp: newXp }).eq('id', user.id);
+            profile.coins = newCoins;
+            profile.xp = newXp;
+            updateProfileUI();
+        });
     }
     
     window.acceptInvite = (roomId) => {
@@ -559,6 +587,8 @@ window.addEventListener('load', async () => {
     // --- GAME ENDED ---
     socket.on('gameEnded', async ({ winnerName, reward }) => {
         currentRoomId = null; 
+        if(timerInterval) clearInterval(timerInterval);
+        
         const modal = document.getElementById('modal-gameover');
         const title = document.getElementById('go-title');
         
@@ -567,22 +597,26 @@ window.addEventListener('load', async () => {
         title.style.webkitBackgroundClip = "text";
         title.style.webkitTextFillColor = "transparent";
         
-        document.getElementById('go-xp').innerText = `+${reward.xp} XP`;
-        document.getElementById('go-coins').innerText = `+${reward.coins} 💰`;
+        document.getElementById('go-xp').innerText = (reward.won ? "+" : "") + `${reward.xp} XP`;
+        document.getElementById('go-coins').innerText = (reward.won ? "+" : "") + `${reward.coins} 💰`;
 
         modal.classList.remove('hidden');
 
         // --- ОБНОВЛЕНИЕ КВЕСТА ---
-        updateQuestProgress('play', 1); 
-        if(reward.won) updateQuestProgress('win', 1);
-        updateQuestProgress('xp', reward.xp);
+        if(reward.won) {
+            updateQuestProgress('play', 1); 
+            updateQuestProgress('win', 1);
+        } else {
+            updateQuestProgress('play', 1);
+        }
+        updateQuestProgress('xp', Math.max(0, reward.xp));
 
         // Обновляем статистику пользователя
-        const newTotalXp = profile.xp + reward.xp;
+        const newTotalXp = Math.max(0, profile.xp + reward.xp);
         const lvlInfo = getLevelInfo(newTotalXp);
         const newLevel = lvlInfo.level;
         
-        const newCoins = profile.coins + reward.coins;
+        const newCoins = Math.max(0, profile.coins + reward.coins);
         const newWins = reward.won ? profile.wins + 1 : profile.wins;
 
         const { error } = await supabase.from('profiles').update({
@@ -603,6 +637,16 @@ window.addEventListener('load', async () => {
         document.getElementById('game-screen').classList.add('hidden');
         document.getElementById('lobby-screen').classList.remove('hidden');
         renderDailyQuestUI(); 
+    };
+    
+    window.leaveRoom = () => {
+        if(confirm("Вы уверены? Вы покинете стол.")) {
+            socket.emit('leaveRoom', currentRoomId);
+            currentRoomId = null;
+            if(timerInterval) clearInterval(timerInterval);
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('lobby-screen').classList.remove('hidden');
+        }
     };
 
     // --- SHOP & INVENTORY ---
@@ -683,9 +727,11 @@ window.addEventListener('load', async () => {
         if(event && event.target) event.target.classList.add('active');
         const { data } = await supabase.from('profiles').select('username, wins, xp, level').order(sortBy, { ascending: false }).limit(10);
         const list = document.getElementById('lb-list');
-        list.innerHTML = data.map((p, i) => `
-            <div class="lb-row"><span>${i+1}</span><span>${p.username}</span><span>${p[sortBy].toFixed(0)}</span></div>
-        `).join('');
+        if(list) {
+            list.innerHTML = data.map((p, i) => `
+                <div class="lb-row"><span>${i+1}</span><span>${p.username}</span><span>${p[sortBy].toFixed(0)}</span></div>
+            `).join('');
+        }
     };
 
     window.switchTab = (tabName, btnElement) => {
@@ -740,8 +786,12 @@ window.addEventListener('load', async () => {
         if(list.length === 0) container.innerHTML = '<div style="text-align:center; opacity:0.5; padding:20px">Нет столов</div>';
         else container.innerHTML = list.map(r => `
             <div class="room-item">
-                <div><strong>${r.name}</strong><br><small>${r.players}/4</small></div>
-                <button class="ios-btn small" onclick="tryJoin('${r.id}', ${r.isPrivate}, this)">Войти</button>
+                <div>
+                    <strong>${r.name}</strong>
+                    ${r.gameStarted ? '<span style="color:#f09819; margin-left:5px; font-size:0.8em">В игре</span>' : ''}
+                    <br><small>${r.players}/4</small>
+                </div>
+                ${!r.gameStarted ? `<button class="ios-btn small" onclick="tryJoin('${r.id}', ${r.isPrivate}, this)">Войти</button>` : ''}
             </div>`).join('');
     });
 
@@ -762,7 +812,25 @@ window.addEventListener('load', async () => {
         document.getElementById('lobby-screen').classList.add('hidden');
         document.getElementById('game-screen').classList.remove('hidden');
         document.getElementById('deck').className = 'card card-back ' + (profile.card_skin || 'skin_default');
+        
+        // Сброс UI
+        document.getElementById('turn-txt').innerText = "Ожидание...";
+        document.getElementById('turn-timer-bar').style.width = '100%';
+        document.getElementById('ready-btn-container').classList.remove('hidden');
+        document.getElementById('ready-toggle').classList.remove('ready-green');
+        document.getElementById('ready-toggle').innerText = "ГОТОВ";
+        document.getElementById('deck').classList.add('hidden'); // Скрываем колоду до начала
+        document.getElementById('pile').innerHTML = '';
+        document.getElementById('hand').innerHTML = '';
+        document.getElementById('opponents').innerHTML = '';
     });
+
+    window.toggleReady = () => {
+        socket.emit('toggleReady', currentRoomId);
+        const btn = document.getElementById('ready-toggle');
+        // Визуальное переключение обработаем через updateState
+        // но можно и тут добавить класс временно
+    };
 
     socket.on('updateState', renderGame);
 
@@ -771,38 +839,102 @@ window.addEventListener('load', async () => {
         const currentP = state.players[state.turnIndex];
         const isTurn = currentP.id === socket.id;
 
+        // --- READY LOGIC ---
+        if (!state.gameStarted) {
+            document.getElementById('ready-btn-container').classList.remove('hidden');
+            document.getElementById('deck').classList.add('hidden');
+            
+            const myPlayer = state.players.find(p => p.id === socket.id);
+            const rBtn = document.getElementById('ready-toggle');
+            if(myPlayer && myPlayer.isReady) {
+                rBtn.innerText = "В ОЖИДАНИИ";
+                rBtn.classList.add('ready-green');
+            } else {
+                rBtn.innerText = "ГОТОВ";
+                rBtn.classList.remove('ready-green');
+            }
+            
+            document.getElementById('opponents').innerHTML = state.players.filter(p => p.id !== socket.id).map(p => `
+                <div class="opp-pill">
+                     <div style="width:30px;height:30px;border-radius:50%;background:#333;margin-bottom:5px;overflow:hidden">
+                        <img src="${getAvatarSrc(p.avatar)}" style="width:100%">
+                    </div>
+                    <strong>${p.name}</strong>
+                    <small>${p.isReady ? '<span style="color:#34d399">Готов</span>' : 'Не готов'}</small>
+                </div>
+            `).join('');
+            
+            return; // Не рендерим игровое поле
+        }
+
+        // --- GAME STARTED ---
+        document.getElementById('ready-btn-container').classList.add('hidden');
+        document.getElementById('deck').classList.remove('hidden');
+
         document.getElementById('turn-txt').innerText = isTurn ? "ТВОЙ ХОД" : `Ходит: ${currentP.name}`;
         document.getElementById('turn-txt').style.color = isTurn ? '#34d399' : '#fff';
         document.getElementById('direction-arrow').innerText = state.direction === 1 ? '↻' : '↺'; 
         document.getElementById('color-dot').style.background = getColorHex(state.currentColor);
 
-        // --- ЛОГИКА КНОПКИ "ВЗЯТЬ КАРТУ" / "ПРОПУСТИТЬ" ---
+        // --- ТАЙМЕР ---
+        if(timerInterval) clearInterval(timerInterval);
+        if(state.turnDeadline) {
+            const updateTimer = () => {
+                const now = Date.now();
+                const left = Math.max(0, state.turnDeadline - now);
+                const pct = (left / 30000) * 100;
+                const bar = document.getElementById('turn-timer-bar');
+                if(bar) bar.style.width = pct + '%';
+                
+                // Цвет таймера
+                if(pct < 30) bar.style.background = '#ff3b30';
+                else bar.style.background = '#34d399';
+            };
+            timerInterval = setInterval(updateTimer, 100);
+            updateTimer();
+        }
+
         const drawBtn = document.getElementById('draw-btn');
         if (state.me && state.me.hasDrawn) {
             drawBtn.innerText = "Пропустить ход";
-            drawBtn.style.background = "rgba(255,255,255,0.2)"; // Визуально меняем стиль
+            drawBtn.style.background = "rgba(255,255,255,0.2)"; 
         } else {
             drawBtn.innerText = "Взять карту";
-            drawBtn.style.background = ""; // Сброс стиля
+            drawBtn.style.background = ""; 
         }
-        // --------------------------------------------------
-
+        
         const userSkin = profile.card_skin || 'skin_default';
-
         if(state.topCard) document.getElementById('pile').innerHTML = renderCard(state.topCard, false, 0, 0, userSkin);
 
-        document.getElementById('opponents').innerHTML = state.players.filter(p => p.id !== socket.id).map(p => `
+        // Отрисовка противников с мини-картами
+        document.getElementById('opponents').innerHTML = state.players.filter(p => p.id !== socket.id).map(p => {
+            // Генерируем мини-карты
+            let miniCards = '';
+            // Ограничим визуальное количество карт (например до 15), чтобы не ломать верстку
+            const displayCount = Math.min(p.handSize, 15);
+            for(let i=0; i<displayCount; i++) {
+                miniCards += `<div class="mini-card-back" style="left:${i*10}px; z-index:${i}"></div>`;
+            }
+            // Если карт слишком много, покажем +N
+            if(p.handSize > 15) miniCards += `<span style="font-size:0.7em; margin-left:${displayCount*10+5}px">+${p.handSize-15}</span>`;
+
+            return `
             <div class="opp-pill ${p.id === currentP.id ? 'opp-active' : ''}">
-                <div style="width:30px;height:30px;border-radius:50%;background:#333;margin-bottom:5px;overflow:hidden">
-                    <img src="${getAvatarSrc(p.avatar)}" style="width:100%">
+                <div style="display:flex; align-items:center; gap:5px; margin-bottom:5px;">
+                    <div style="width:30px;height:30px;border-radius:50%;background:#333;overflow:hidden">
+                        <img src="${getAvatarSrc(p.avatar)}" style="width:100%">
+                    </div>
+                    <strong>${p.name}</strong>
                 </div>
-                <strong>${p.name}</strong>
-                <small>🃏 ${p.handSize}</small>
-                ${p.quattroSaid ? '<span style="color:gold">QUATTRO!</span>' : ''}
+                <div class="mini-hand-container" style="width:${displayCount*10 + 20}px">
+                    ${miniCards}
+                </div>
+                ${p.quattroSaid ? '<span style="color:gold; font-weight:bold; margin-top:2px">QUATTRO!</span>' : ''}
             </div>
-        `).join('');
+        `}).join('');
 
         if(me && me.hand) {
+            // Карты уже отсортированы сервером
             document.getElementById('hand').innerHTML = me.hand.map((c, i) => renderCard(c, true, i, me.hand.length, userSkin)).join('');
         }
         
@@ -815,7 +947,20 @@ window.addEventListener('load', async () => {
 
     function renderCard(card, isHand, index, total, skinClass) {
         const colorClass = card.color === 'wild' ? 'wild' : card.color;
-        const style = isHand ? `style="transform: rotate(${(index - (total-1)/2)*5}deg); margin-bottom:${Math.abs((index-(total-1)/2)*5)}px"` : '';
+        
+        // Для десктопа оставляем небольшой веер, для мобилок (media query в css) уберем transform
+        // Но чтобы работало везде, сделаем через CSS классы.
+        // Передаем inline стили только для веера, но упростим их.
+        
+        let style = '';
+        if (isHand) {
+            // Логика "веера" перемещена в CSS или упрощена для свайпа.
+            // Если нужен свайп, карты должны идти в ряд. Вращение мешает свайпу.
+            // Поэтому убираем вращение для основной логики рендера, или делаем его минимальным.
+            // Пользователь просил свайп. 
+            // Мы просто не будем задавать transform здесь, пусть CSS разбирается.
+        }
+
         const click = isHand ? `onclick="clickCard(${index}, '${card.color}')"` : '';
         
         let displayValue = card.value;

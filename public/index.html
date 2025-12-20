@@ -48,12 +48,11 @@
                     <button class="nav-btn" onclick="switchTab('quests', this)">📜 Задания <span id="quest-badge" class="badge hidden">!</span></button>
                     <button class="nav-btn" onclick="switchTab('chats', this)">💬 Чаты <span id="chat-badge" class="badge hidden"></span></button>
                     <button class="nav-btn" onclick="switchTab('shop', this)">🛒 Магазин</button>
-                    <button class="nav-btn" onclick="switchTab('leaderboard', this)">🏆 Лидеры</button>
-                    <button class="nav-btn" onclick="switchTab('friends', this)">👥 Друзья <span id="req-badge" class="badge hidden"></span></button>
+                    <button class="nav-btn" onclick="switchTab('friends', this)">👥 Друзья</button>
                     <button class="nav-btn" onclick="switchTab('profile', this)">👕 Профиль</button>
                 </nav>
 
-                <button id="logout-btn" class="ios-btn secondary mt-auto">Выйти</button>
+                <button id="logout-btn" class="ios-btn secondary mt-auto">Выйти из аккаунта</button>
             </aside>
 
             <main class="glass-panel content-area">
@@ -68,24 +67,13 @@
 
                 <div id="tab-quests" class="tab-content hidden">
                     <h3>Текущие задания</h3>
-                    <div class="quest-container-center">
-                        <div class="daily-quest-box">
-                            <h4>Ежедневное задание</h4>
-                            <p id="dq-text">Загрузка...</p>
-                            
-                            <div id="dq-progress-container" style="width:100%; margin-top:15px;">
-                                <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:5px; opacity:0.8">
-                                    <span>Прогресс</span>
-                                    <span id="dq-progress-text">0/1</span>
-                                </div>
-                                <div style="width:100%; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden">
-                                    <div id="dq-progress-bar" style="height:100%; width:0%; background:#34d399; transition: width 0.5s"></div>
-                                </div>
-                            </div>
-
-                            <div id="dq-status" style="margin-top:15px; font-weight:bold; color:#ccc"></div>
-                            <button id="claim-daily" class="claim-btn hidden">ЗАБРАТЬ НАГРАДУ</button>
-                        </div>
+                    <div class="daily-quest-box">
+                        <h4 style="margin:0 0 10px 0; color:#34d399">Ежедневное задание</h4>
+                        <p id="dq-text">Загрузка...</p>
+                        <div id="dq-progress-bar" style="width:0%; height:5px; background:#34d399; margin:10px 0;"></div>
+                        <p id="dq-progress-text" style="font-size:0.9rem; opacity:0.7; margin-top:5px"></p>
+                        <div id="dq-status" style="margin-top:10px; font-weight:bold"></div>
+                        <button id="claim-daily" class="ios-btn primary hidden">Забрать</button>
                     </div>
                 </div>
 
@@ -99,7 +87,7 @@
                             <button onclick="closeChat()" class="ios-btn small secondary" style="width:auto; margin:0">❮ Назад</button>
                             <span id="chat-friend-name" style="font-weight:bold; margin-left:10px">Friend</span>
                         </div>
-                        <div id="chat-messages" class="chat-messages scroll-list"></div>
+                        <div id="chat-messages" class="scroll-list" style="padding:10px"></div>
                         <div class="chat-input-area">
                             <input type="text" id="chat-input" placeholder="Сообщение..." class="ios-input" style="margin:0">
                             <button id="send-msg-btn" class="ios-btn primary small" style="width:auto; margin:0">➤</button>
@@ -112,66 +100,55 @@
                     <div id="shop-grid" class="shop-grid"></div>
                 </div>
 
-                <div id="tab-leaderboard" class="tab-content hidden">
-                    <div class="lb-filters">
-                        <button class="filter-btn active" onclick="loadLeaderboard('wins')">Победы</button>
-                        <button class="filter-btn" onclick="loadLeaderboard('xp')">Опыт</button>
-                        <button class="filter-btn" onclick="loadLeaderboard('level')">Уровень</button>
-                    </div>
-                    <div class="lb-header-row">
-                        <span>#</span><span>Игрок</span><span>Значение</span>
-                    </div>
-                    <div id="lb-list" class="scroll-list"></div>
-                </div>
-
                 <div id="tab-friends" class="tab-content hidden">
                     <div class="friend-add-box">
-                        <input type="text" id="friend-id-input" placeholder="Введите ID друга (6 символов)" class="ios-input">
+                        <input type="text" id="friend-id-input" placeholder="ID друга" class="ios-input">
                         <button onclick="sendFriendRequest()" class="ios-btn primary small">Добавить</button>
                     </div>
-                    
                     <div id="friend-requests-section" class="hidden">
-                        <h4 style="color:var(--accent-gold); margin:10px 0 5px 0">Заявки в друзья</h4>
-                        <div id="requests-list" class="scroll-list" style="max-height: 150px; margin-bottom:15px"></div>
-                        <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1)">
+                        <h4>Заявки</h4>
+                        <div id="requests-list" class="scroll-list"></div>
                     </div>
-
                     <h3>Список друзей</h3>
                     <div id="friends-list" class="scroll-list"></div>
                 </div>
 
                 <div id="tab-profile" class="tab-content hidden">
                     <h3>Кастомизация</h3>
-                    
-                    <h4>Стили карт</h4>
-                    <div id="inv-skins" class="inventory-row"></div>
-
-                    <h4 style="margin-top:20px">Аватары</h4>
-                    <div id="inv-avatars" class="inventory-row"></div>
-                    
-                    <h4 style="margin-top:20px">Баннеры</h4>
-                    <div id="inv-banners" class="inventory-row"></div>
+                    <h4>Стили карт</h4><div id="inv-skins" class="inventory-row"></div>
+                    <h4>Аватары</h4><div id="inv-avatars" class="inventory-row"></div>
                 </div>
-
             </main>
         </div>
     </section>
 
     <section id="game-screen" class="screen hidden">
         <header class="game-header glass-strip">
-            <div id="turn-txt" class="status-badge">Ожидание...</div>
-            <div class="color-indicator-wrapper">
-                <span id="direction-arrow" style="font-size:1.5rem; margin-right:10px">↻</span>
-                <div id="color-dot" class="color-blob"></div>
+            <div class="game-header-top">
+                <div id="turn-txt" class="status-badge" style="width:200px">Ожидание...</div>
+                <div class="color-indicator-wrapper flex-center" style="display:flex">
+                    <span id="direction-arrow" style="font-size:1.5rem; margin-right:10px">↻</span>
+                    <div id="color-dot" class="color-blob"></div>
+                </div>
+                <div style="display:flex; gap:5px">
+                    <button onclick="leaveRoom()" class="ios-btn small secondary" style="background: rgba(255, 59, 48, 0.2); color: #ff3b30;">Выход</button>
+                    <button onclick="openInviteModal()" class="ios-btn small secondary">Invite</button>
+                    <button id="bot-btn" class="ios-btn small">Add Bot</button>
+                </div>
             </div>
-            <div style="display:flex; gap:5px">
-                <button onclick="openInviteModal()" class="ios-btn small secondary">Invite</button>
-                <button id="bot-btn" class="ios-btn small">Add Bot</button>
+            <div class="timer-container">
+                <div id="turn-timer-bar"></div>
             </div>
         </header>
 
         <div class="game-arena">
             <div id="opponents" class="opponents-row"></div>
+            
+            <div id="ready-btn-container" class="hidden">
+                <button id="ready-toggle" class="big-ready-btn" onclick="toggleReady()">ГОТОВ</button>
+                <div style="text-align:center; margin-top:10px; color:rgba(255,255,255,0.7); text-shadow:0 1px 2px black">Ожидание игроков...</div>
+            </div>
+
             <div class="center-table">
                 <div id="deck" class="card card-back">Q</div>
                 <div id="pile"></div>
@@ -235,20 +212,13 @@
         <div class="glass-panel modal-box center-text">
             <h1 id="go-title" class="go-title">ПОБЕДА!</h1>
             <div class="rewards-box">
-                <div class="reward-item">
-                    <span>Опыт</span>
-                    <strong id="go-xp" style="color:#34d399">+100 XP</strong>
-                </div>
-                <div class="reward-item">
-                    <span>Монеты</span>
-                    <strong id="go-coins" style="color:#f09819">+50 💰</strong>
-                </div>
+                <div class="reward-item"><span>Опыт</span><strong id="go-xp" style="color:#34d399">+100 XP</strong></div>
+                <div class="reward-item"><span>Монеты</span><strong id="go-coins" style="color:#f09819">+50 💰</strong></div>
             </div>
             <div class="modal-actions column">
                 <button onclick="backToLobby()" class="ios-btn primary">В лобби</button>
             </div>
         </div>
     </div>
-
 </body>
 </html>
