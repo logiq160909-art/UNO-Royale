@@ -187,9 +187,9 @@ window.addEventListener('load', async () => {
         // 1. Уже забрали?
         if(lastClaimDateString === now.toDateString()) {
             progBar.style.width = '100%';
-            progBar.style.background = '#34d399';
+            progBar.style.background = 'var(--c-green)'; // Update color reference
             if(progTxt) progTxt.innerText = `${quest.target}/${quest.target}`;
-            if(statusDiv) statusDiv.innerHTML = `<span style="color:#34d399">✅ ЗАДАНИЕ ВЫПОЛНЕНО</span>`;
+            if(statusDiv) statusDiv.innerHTML = `<span style="color:var(--c-green)">✅ ВЫПОЛНЕНО</span>`;
             return;
         }
 
@@ -203,7 +203,7 @@ window.addEventListener('load', async () => {
             badge.classList.remove('hidden'); 
             badge.innerText = "!";
             
-            if(statusDiv) statusDiv.innerHTML = `<span style="color:#f09819">Награда доступна!</span>`;
+            if(statusDiv) statusDiv.innerHTML = `<span style="color:var(--c-yellow)">Награда доступна!</span>`;
             btn.classList.remove('hidden');
             btn.disabled = false;
             
@@ -287,16 +287,18 @@ window.addEventListener('load', async () => {
         const container = document.getElementById('requests-list');
         const section = document.getElementById('friend-requests-section');
         const badge = document.getElementById('req-badge');
+        // Fix for badge element not existing in previous HTML - handled by check
+        const badgeEl = badge || { classList: { add:()=>{}, remove:()=>{} }, innerText: "" };
 
         if(!reqs || reqs.length === 0) {
             section.classList.add('hidden');
-            badge.classList.add('hidden');
+            badgeEl.classList.add('hidden');
             return;
         }
 
         section.classList.remove('hidden');
-        badge.classList.remove('hidden');
-        badge.innerText = reqs.length;
+        badgeEl.classList.remove('hidden');
+        badgeEl.innerText = reqs.length;
 
         const senderIds = reqs.map(r => r.sender_id);
         const { data: profiles } = await supabase.from('profiles').select('id, username').in('id', senderIds);
@@ -520,7 +522,7 @@ window.addEventListener('load', async () => {
 
         socket.on('quattroEffect', (name) => {
              const flash = document.getElementById('quattro-flash');
-             flash.innerText = `${name} QUATTRO!`;
+             flash.innerText = `${name} 4COLORS!`; // UPDATED TEXT
              flash.classList.remove('hidden');
              setTimeout(() => flash.classList.add('hidden'), 2000);
         });
@@ -533,7 +535,6 @@ window.addEventListener('load', async () => {
              setTimeout(() => flash.classList.add('hidden'), 3000);
         });
         
-        // Обработка кика за AFK
         socket.on('kickedAFK', async (penalty) => {
             currentRoomId = null;
             document.getElementById('game-screen').classList.add('hidden');
@@ -541,7 +542,6 @@ window.addEventListener('load', async () => {
             
             alert(`Вы были исключены за бездействие! Штраф: -${penalty.coins} монет и -${penalty.xp} XP.`);
             
-            // Применяем штраф в БД
             const newCoins = Math.max(0, profile.coins - penalty.coins);
             const newXp = Math.max(0, profile.xp - penalty.xp);
             
@@ -593,7 +593,8 @@ window.addEventListener('load', async () => {
         const title = document.getElementById('go-title');
         
         title.innerText = reward.won ? "ПОБЕДА!" : "ПОРАЖЕНИЕ";
-        title.style.background = reward.won ? "linear-gradient(to right, #f09819, #edde5d)" : "gray";
+        // UPDATED GRADIENT COLORS
+        title.style.background = reward.won ? "linear-gradient(to right, #2ed573, #ffa502)" : "gray";
         title.style.webkitBackgroundClip = "text";
         title.style.webkitTextFillColor = "transparent";
         
@@ -602,7 +603,6 @@ window.addEventListener('load', async () => {
 
         modal.classList.remove('hidden');
 
-        // --- ОБНОВЛЕНИЕ КВЕСТА ---
         if(reward.won) {
             updateQuestProgress('play', 1); 
             updateQuestProgress('win', 1);
@@ -611,7 +611,6 @@ window.addEventListener('load', async () => {
         }
         updateQuestProgress('xp', Math.max(0, reward.xp));
 
-        // Обновляем статистику пользователя
         const newTotalXp = Math.max(0, profile.xp + reward.xp);
         const lvlInfo = getLevelInfo(newTotalXp);
         const newLevel = lvlInfo.level;
@@ -745,7 +744,9 @@ window.addEventListener('load', async () => {
         if(tabName === 'friends') {
              loadFriends();
              loadFriendRequests();
-             document.getElementById('req-badge').classList.add('hidden');
+             // Fix for badge not existing sometimes
+             const b = document.getElementById('req-badge');
+             if(b) b.classList.add('hidden');
         }
         if(tabName === 'chats') {
             loadFriends(); 
@@ -788,14 +789,13 @@ window.addEventListener('load', async () => {
             <div class="room-item">
                 <div>
                     <strong>${r.name}</strong>
-                    ${r.gameStarted ? '<span style="color:#f09819; margin-left:5px; font-size:0.8em">В игре</span>' : ''}
+                    ${r.gameStarted ? '<span style="color:#ffa502; margin-left:5px; font-size:0.8em">В игре</span>' : ''}
                     <br><small>${r.players}/4</small>
                 </div>
                 ${!r.gameStarted ? `<button class="ios-btn small" onclick="tryJoin('${r.id}', ${r.isPrivate}, this)">Войти</button>` : ''}
             </div>`).join('');
     });
 
-    // --- АВТОМАТИЧЕСКИЙ ВХОД ПОСЛЕ СОЗДАНИЯ ---
     socket.on('roomCreated', (roomId) => {
         const password = document.getElementById('r-pass').value;
         socket.emit('joinRoom', { 
@@ -819,7 +819,7 @@ window.addEventListener('load', async () => {
         document.getElementById('ready-btn-container').classList.remove('hidden');
         document.getElementById('ready-toggle').classList.remove('ready-green');
         document.getElementById('ready-toggle').innerText = "ГОТОВ";
-        document.getElementById('deck').classList.add('hidden'); // Скрываем колоду до начала
+        document.getElementById('deck').classList.add('hidden'); 
         document.getElementById('pile').innerHTML = '';
         document.getElementById('hand').innerHTML = '';
         document.getElementById('opponents').innerHTML = '';
@@ -827,9 +827,6 @@ window.addEventListener('load', async () => {
 
     window.toggleReady = () => {
         socket.emit('toggleReady', currentRoomId);
-        const btn = document.getElementById('ready-toggle');
-        // Визуальное переключение обработаем через updateState
-        // но можно и тут добавить класс временно
     };
 
     socket.on('updateState', renderGame);
@@ -860,11 +857,11 @@ window.addEventListener('load', async () => {
                         <img src="${getAvatarSrc(p.avatar)}" style="width:100%">
                     </div>
                     <strong>${p.name}</strong>
-                    <small>${p.isReady ? '<span style="color:#34d399">Готов</span>' : 'Не готов'}</small>
+                    <small>${p.isReady ? '<span style="color:var(--c-green)">Готов</span>' : 'Не готов'}</small>
                 </div>
             `).join('');
             
-            return; // Не рендерим игровое поле
+            return;
         }
 
         // --- GAME STARTED ---
@@ -872,7 +869,7 @@ window.addEventListener('load', async () => {
         document.getElementById('deck').classList.remove('hidden');
 
         document.getElementById('turn-txt').innerText = isTurn ? "ТВОЙ ХОД" : `Ходит: ${currentP.name}`;
-        document.getElementById('turn-txt').style.color = isTurn ? '#34d399' : '#fff';
+        document.getElementById('turn-txt').style.color = isTurn ? 'var(--c-green)' : '#fff';
         document.getElementById('direction-arrow').innerText = state.direction === 1 ? '↻' : '↺'; 
         document.getElementById('color-dot').style.background = getColorHex(state.currentColor);
 
@@ -887,8 +884,8 @@ window.addEventListener('load', async () => {
                 if(bar) bar.style.width = pct + '%';
                 
                 // Цвет таймера
-                if(pct < 30) bar.style.background = '#ff3b30';
-                else bar.style.background = '#34d399';
+                if(pct < 30) bar.style.background = '#ff4757';
+                else bar.style.background = '#2ed573';
             };
             timerInterval = setInterval(updateTimer, 100);
             updateTimer();
@@ -897,7 +894,7 @@ window.addEventListener('load', async () => {
         const drawBtn = document.getElementById('draw-btn');
         if (state.me && state.me.hasDrawn) {
             drawBtn.innerText = "Пропустить ход";
-            drawBtn.style.background = "rgba(255,255,255,0.2)"; 
+            drawBtn.style.background = "rgba(255,255,255,0.1)"; 
         } else {
             drawBtn.innerText = "Взять карту";
             drawBtn.style.background = ""; 
@@ -906,16 +903,13 @@ window.addEventListener('load', async () => {
         const userSkin = profile.card_skin || 'skin_default';
         if(state.topCard) document.getElementById('pile').innerHTML = renderCard(state.topCard, false, 0, 0, userSkin);
 
-        // Отрисовка противников с мини-картами
+        // Отрисовка противников
         document.getElementById('opponents').innerHTML = state.players.filter(p => p.id !== socket.id).map(p => {
-            // Генерируем мини-карты
             let miniCards = '';
-            // Ограничим визуальное количество карт (например до 15), чтобы не ломать верстку
             const displayCount = Math.min(p.handSize, 15);
             for(let i=0; i<displayCount; i++) {
                 miniCards += `<div class="mini-card-back" style="left:${i*10}px; z-index:${i}"></div>`;
             }
-            // Если карт слишком много, покажем +N
             if(p.handSize > 15) miniCards += `<span style="font-size:0.7em; margin-left:${displayCount*10+5}px">+${p.handSize-15}</span>`;
 
             return `
@@ -929,17 +923,19 @@ window.addEventListener('load', async () => {
                 <div class="mini-hand-container" style="width:${displayCount*10 + 20}px">
                     ${miniCards}
                 </div>
-                ${p.quattroSaid ? '<span style="color:gold; font-weight:bold; margin-top:2px">QUATTRO!</span>' : ''}
+                ${p.quattroSaid ? '<span style="color:var(--c-yellow); font-weight:bold; margin-top:2px">4COLORS!</span>' : ''}
             </div>
         `}).join('');
 
         if(me && me.hand) {
-            // Карты уже отсортированы сервером
             document.getElementById('hand').innerHTML = me.hand.map((c, i) => renderCard(c, true, i, me.hand.length, userSkin)).join('');
         }
         
+        // Кнопка 4COLORS
         if(isTurn && me.hand.length === 2 && !state.players.find(p=>p.id===socket.id).quattroSaid) {
             document.getElementById('quattro-controls').classList.remove('hidden');
+            // UPDATED BUTTON TEXT
+            document.getElementById('quattro-btn').innerText = "4COLORS!";
         } else {
             document.getElementById('quattro-controls').classList.add('hidden');
         }
@@ -948,35 +944,21 @@ window.addEventListener('load', async () => {
     function renderCard(card, isHand, index, total, skinClass) {
         const colorClass = card.color === 'wild' ? 'wild' : card.color;
         
-        // Для десктопа оставляем небольшой веер, для мобилок (media query в css) уберем transform
-        // Но чтобы работало везде, сделаем через CSS классы.
-        // Передаем inline стили только для веера, но упростим их.
-        
+        // Removed specific rotation styles in JS to let CSS handle hover effects cleanly
         let style = '';
-        if (isHand) {
-            // Логика "веера" перемещена в CSS или упрощена для свайпа.
-            // Если нужен свайп, карты должны идти в ряд. Вращение мешает свайпу.
-            // Поэтому убираем вращение для основной логики рендера, или делаем его минимальным.
-            // Пользователь просил свайп. 
-            // Мы просто не будем задавать transform здесь, пусть CSS разбирается.
-        }
-
+        
         const click = isHand ? `onclick="clickCard(${index}, '${card.color}')"` : '';
         
         let displayValue = card.value;
         if(card.value === 'SKIP') displayValue = '⊘'; 
         else if(card.value === 'REVERSE') displayValue = '⇄'; 
         else if(card.value === 'WILD') displayValue = '★'; 
-        else if(card.value === '+4') displayValue = '+4'; 
-        else if(card.value === '+2') displayValue = '+2'; 
-
-        const textStyle = card.color === 'wild' ? 'style="color: white; text-shadow: 0 0 5px black;"' : '';
+        
         const finalClass = `card ${colorClass} ${skinClass}`;
-
-        return `<div class="${finalClass}" ${click} ${style}><span ${textStyle}>${displayValue}</span></div>`;
+        return `<div class="${finalClass}" ${click} ${style}><span>${displayValue}</span></div>`;
     }
 
-    function getColorHex(c) { return {red:'#ff5e62',blue:'#00c6ff',green:'#56ab2f',yellow:'#f09819',wild:'#fff'}[c] || '#fff'; }
+    function getColorHex(c) { return {red:'#ff4757',blue:'#2e86de',green:'#2ed573',yellow:'#ffa502',wild:'#fff'}[c] || '#fff'; }
 
     window.clickCard = (i, c) => {
         if(c === 'wild') { pendingIndex = i; document.getElementById('modal-color').classList.remove('hidden'); }

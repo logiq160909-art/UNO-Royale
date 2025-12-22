@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Quattro Cards Royale</title>
+    <title>4Colors</title>
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -11,14 +11,18 @@
 </head>
 <body>
     <div class="background-mesh">
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="orb orb-3"></div>
+        <div class="orb orb-red"></div>
+        <div class="orb orb-blue"></div>
+        <div class="orb orb-green"></div>
+        <div class="orb orb-yellow"></div>
+        <div class="mesh-blur"></div>
     </div>
 
     <section id="auth-screen" class="screen flex-center">
         <div class="glass-panel auth-box">
-            <h1 class="logo">QUATTRO <span class="thin">CARDS</span></h1>
+            <h1 class="logo">
+                <span class="c-4">4</span><span class="c-colors">COLORS</span>
+            </h1>
             <input type="email" id="email" placeholder="Email" class="ios-input">
             <input type="password" id="password" placeholder="Пароль" class="ios-input">
             <button id="auth-btn" class="ios-btn primary">Войти</button>
@@ -52,14 +56,14 @@
                     <button class="nav-btn" onclick="switchTab('profile', this)">👕 Профиль</button>
                 </nav>
 
-                <button id="logout-btn" class="ios-btn secondary mt-auto">Выйти из аккаунта</button>
+                <button id="logout-btn" class="ios-btn secondary mt-auto">Выйти</button>
             </aside>
 
             <main class="glass-panel content-area">
                 
                 <div id="tab-rooms" class="tab-content active">
                     <div class="tab-header">
-                        <h3>Доступные столы</h3>
+                        <h3>Игровые столы</h3>
                         <button onclick="openModal('modal-create')" class="ios-btn primary small">Создать стол</button>
                     </div>
                     <div id="rooms-list" class="scroll-list"></div>
@@ -68,9 +72,9 @@
                 <div id="tab-quests" class="tab-content hidden">
                     <h3>Текущие задания</h3>
                     <div class="daily-quest-box">
-                        <h4 style="margin:0 0 10px 0; color:#34d399">Ежедневное задание</h4>
+                        <h4 style="margin:0 0 10px 0;">Ежедневное задание</h4>
                         <p id="dq-text">Загрузка...</p>
-                        <div id="dq-progress-bar" style="width:0%; height:5px; background:#34d399; margin:10px 0;"></div>
+                        <div id="dq-progress-bar" class="quest-prog-bar"></div>
                         <p id="dq-progress-text" style="font-size:0.9rem; opacity:0.7; margin-top:5px"></p>
                         <div id="dq-status" style="margin-top:10px; font-weight:bold"></div>
                         <button id="claim-daily" class="ios-btn primary hidden">Забрать</button>
@@ -131,9 +135,9 @@
                     <div id="color-dot" class="color-blob"></div>
                 </div>
                 <div style="display:flex; gap:5px">
-                    <button onclick="leaveRoom()" class="ios-btn small secondary" style="background: rgba(255, 59, 48, 0.2); color: #ff3b30;">Выход</button>
-                    <button onclick="openInviteModal()" class="ios-btn small secondary">Invite</button>
-                    <button id="bot-btn" class="ios-btn small">Add Bot</button>
+                    <button onclick="leaveRoom()" class="ios-btn small secondary danger-text">Выход</button>
+                    <button onclick="openInviteModal()" class="ios-btn small secondary">Позвать</button>
+                    <button id="bot-btn" class="ios-btn small secondary">+ Бот</button>
                 </div>
             </div>
             <div class="timer-container">
@@ -150,15 +154,15 @@
             </div>
 
             <div class="center-table">
-                <div id="deck" class="card card-back">Q</div>
+                <div id="deck" class="card card-back">4</div>
                 <div id="pile"></div>
             </div>
-            <div id="quattro-flash" class="quattro-flash hidden">QUATTRO!</div>
+            <div id="quattro-flash" class="quattro-flash hidden">4COLORS!</div>
         </div>
 
         <div class="player-hud glass-strip-bottom">
             <div id="quattro-controls" class="hidden floating-action">
-                <button id="quattro-btn" class="quattro-shout-btn">QUATTRO!</button>
+                <button id="quattro-btn" class="quattro-shout-btn">4COLORS!</button>
             </div>
             <div id="hand" class="hand-container"></div>
             <button id="draw-btn" class="ios-btn draw-action">Взять карту</button>
@@ -168,7 +172,7 @@
     <div id="modal-create" class="overlay hidden">
         <div class="glass-panel modal-box">
             <h3>Новая игра</h3>
-            <input type="text" id="r-name" placeholder="Название" class="ios-input">
+            <input type="text" id="r-name" placeholder="Название стола" class="ios-input">
             <input type="password" id="r-pass" placeholder="Пароль (необяз.)" class="ios-input">
             <div class="modal-actions">
                 <button id="create-confirm" class="ios-btn primary">Создать</button>
@@ -187,8 +191,8 @@
 
     <div id="modal-invite-received" class="overlay hidden">
         <div class="glass-panel modal-box">
-            <h3 style="color:var(--accent-green)">Приглашение!</h3>
-            <p id="invite-text">Игрок зовет вас играть</p>
+            <h3 style="color:var(--c-green)">Приглашение!</h3>
+            <p id="invite-text">Вас зовут играть</p>
             <div class="modal-actions">
                 <button id="accept-invite-btn" class="ios-btn primary">Принять</button>
                 <button onclick="closeModals()" class="ios-btn secondary">Отклонить</button>
